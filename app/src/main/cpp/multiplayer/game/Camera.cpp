@@ -11,8 +11,6 @@ void CCamera::InjectHooks() {
 }
 
 CCam& CCamera::GetActiveCamera() {
-    CCamera& TheCamera = *reinterpret_cast<CCamera*>(g_libGTASA + (VER_x32 ? 0x00951FA8 : 0xBBA8D0));
-
     return TheCamera.m_aCams[TheCamera.m_nActiveCam];
 }
 
@@ -62,8 +60,6 @@ void CCamera::LookAtPoint(float fX, float fY, float fZ, int iType)
 // 0.3.7
 void CCamera::InterpolateCameraPos(CVector *posFrom, CVector *posTo, int time, uint8_t mode)
 {
-    CCamera& TheCamera = *reinterpret_cast<CCamera*>(g_libGTASA + (VER_x32 ? 0x00951FA8 : 0xBBA8D0));
-
     ScriptCommand(&restore_camera_to_user);
     ScriptCommand(&lock_camera_position1, 1);
     ScriptCommand(&set_camera_pos_time_smooth, posFrom->x, posFrom->y, posFrom->z, posTo->x, posTo->y, posTo->z, time, mode);

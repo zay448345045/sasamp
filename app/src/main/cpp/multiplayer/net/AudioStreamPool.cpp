@@ -172,8 +172,6 @@ void CAudioStreamPool::Process()
         pStream->Process(reinterpret_cast<RwMatrix *>(&pLocalPed->m_pPed->GetMatrix()));
 	}
 
-	CCamera& TheCamera = *reinterpret_cast<CCamera*>(g_libGTASA + (VER_x32 ? 0x00951FA8 : 0xBBA8D0));
-
 	BASS_Set3DPosition(
 			reinterpret_cast<const BASS_3DVECTOR*>(&TheCamera.GetPosition()), nullptr,
 			reinterpret_cast<const BASS_3DVECTOR*>(&TheCamera.GetMatrix().GetUp()),

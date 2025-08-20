@@ -86,7 +86,6 @@ float CEntity::GetDistanceFromCamera()
     if(!this)
         return 0;
 
-    CCamera& TheCamera = *reinterpret_cast<CCamera*>(g_libGTASA + (VER_x32 ? 0x00951FA8 : 0xBBA8D0));
     return DistanceBetweenPoints(GetPosition(), TheCamera.GetPosition());
 }
 
@@ -125,8 +124,6 @@ bool CEntity::IsVisible()
 bool CEntity::GetIsOnScreen() {
     CVector thisVec;
     GetBoundCentre(thisVec);
-
-    CCamera& TheCamera = *reinterpret_cast<CCamera*>(g_libGTASA + (VER_x32 ? 0x00951FA8 : 0xBBA8D0));
     return TheCamera.IsSphereVisible(&thisVec, CModelInfo::GetModelInfo(m_nModelIndex)->GetColModel()->GetBoundRadius());
 }
 
@@ -502,7 +499,6 @@ void CEntity::ProcessLightsForEntity() {
     if (!mi->m_n2dfxCount)
         return;
 
-    CCamera& TheCamera = *reinterpret_cast<CCamera*>(g_libGTASA + (VER_x32 ? 0x00951FA8 : 0xBBA8D0));
     for (int32 iFxInd = 0; iFxInd < mi->m_n2dfxCount; ++iFxInd) {
         auto effect = CHook::CallFunction<C2dEffect*>("_ZN14CBaseModelInfo11Get2dEffectEi", mi, iFxInd);
         auto fIntensity = 1.0F;

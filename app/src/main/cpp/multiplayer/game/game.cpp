@@ -454,8 +454,6 @@ void CGame::InjectHooks() {
 bool CGame::InitialiseRenderWare() {
 	DLOG("InitialiseRenderWare ..");
 
-	CCamera& TheCamera = *reinterpret_cast<CCamera*>(g_libGTASA + (VER_x32 ? 0x00951FA8 : 0xBBA8D0));
-
 	CTxdStore::Initialise();
 	CVisibilityPlugins::Initialise();
 
@@ -592,8 +590,6 @@ void CGame::Process() {
 	// CTheZones::Update()
 
 	// CCover::Update()
-
-	CCamera& TheCamera = *reinterpret_cast<CCamera*>(g_libGTASA + (VER_x32 ? 0x00951FA8 : 0xBBA8D0));
 
 //	auto p_tx = (CSimpleTransform *)&TheCamera + 0x14 + 0x30;
 //	if ( !TheCamera.m_pMat )

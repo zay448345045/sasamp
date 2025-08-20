@@ -42,8 +42,6 @@ void CPlayerTags::Render() {
 	RenderActors();
 
 	static CVector vecPos;
-    static CCamera& TheCamera = *reinterpret_cast<CCamera*>(g_libGTASA + (VER_x32 ? 0x00951FA8 : 0xBBA8D0));
-
 	for(auto &pair : CPlayerPool::spawnedPlayers) {
 		auto &pPlayer = pair.second;
 		auto playerId = pair.first;
@@ -85,8 +83,6 @@ void CPlayerTags::Render() {
 void CPlayerTags::RenderActors() {
 
 	static CVector vecPos;
-	static CCamera& TheCamera = *reinterpret_cast<CCamera*>(g_libGTASA + (VER_x32 ? 0x00951FA8 : 0xBBA8D0));
-
 	for (auto & pair : CActorPool::list) {
 
 		auto &pActor = pair.second;

@@ -308,7 +308,6 @@ bool CWeapon::Fire(CEntity* firedBy, CVector* startPosn, CVector* barrelPosn, CE
                             ? firedBy->AsPed()
                             : nullptr;
 
-    CCamera& TheCamera = *reinterpret_cast<CCamera*>(g_libGTASA + (VER_x32 ? 0x00951FA8 : 0xBBA8D0));
     const auto wi = &GetWeaponInfo(firedByPed);
 
     CVector point{ 0.f, 0.f, 0.6f };

@@ -142,8 +142,6 @@ void CClouds::Render() {
 // From `CClouds::Render` [0x713D2A - 0x714019]
 // Draws the R* logo on the sky
 void CClouds::Render_MaybeRenderRockstarLogo(float colorBalance) {
-    CCamera& TheCamera = *reinterpret_cast<CCamera*>(g_libGTASA + (VER_x32 ? 0x00951FA8 : 0xBBA8D0));
-
     constexpr auto LOGO_VISIBLE_FROM_HRS  = 22u,
             LOGO_VISIBLE_UNTIL_HRS = 5u;
 
@@ -238,7 +236,6 @@ extern CGUI* pGUI;
 #include <algorithm>
 
 void CClouds::Render_RenderLowClouds(float colorBalance) {
-    CCamera& TheCamera = *reinterpret_cast<CCamera*>(g_libGTASA + (VER_x32 ? 0x00951FA8 : 0xBBA8D0));
     const auto& currentColours = CTimeCycle::m_CurrentColours;
 
     RwRenderStateSet(rwRENDERSTATETEXTURERASTER, RWRSTATE(RwTextureGetRaster(gpCloudTex)));
@@ -275,8 +272,6 @@ void CClouds::Render_RenderLowClouds(float colorBalance) {
 
 // From `CClouds::Render` [0x714387 - 0x714640]
 void CClouds::Render_MaybeRenderStreaks() {
-    CCamera& TheCamera = *reinterpret_cast<CCamera*>(g_libGTASA + (VER_x32 ? 0x00951FA8 : 0xBBA8D0));
-
     constexpr auto REPEAT_INTERVAL_MS = 8192u; // Use power-of-2 numbers here if possible
     constexpr auto VISIBILE_TIME_MS   = 800u;
     static_assert(REPEAT_INTERVAL_MS >= VISIBILE_TIME_MS);
@@ -343,8 +338,6 @@ void CClouds::Render_MaybeRenderStreaks() {
 }
 
 void CClouds::Render_MaybeRenderRainbows() {
-    CCamera& TheCamera = *reinterpret_cast<CCamera*>(g_libGTASA + (VER_x32 ? 0x00951FA8 : 0xBBA8D0));
-
     constexpr size_t NUM_RAINBOW_LINES = 6;
     const CRGBA RAINBOW_LINES_COLOR[]{
             {30, 0,  0,  255},
@@ -401,9 +394,6 @@ void CClouds::Render_MaybeRenderRainbows() {
 }
 
 void CClouds::Render_MaybeRenderMoon(float colorBalance) {
-    CCamera& TheCamera = *reinterpret_cast<CCamera*>(g_libGTASA + (VER_x32 ? 0x00951FA8 : 0xBBA8D0));
-
-
     // 3D position offset of the moon relative to the camera
     constexpr auto CAMERA_TO_CLOUD_OFFSET = CVector{ 0.f, -100.f, 15.f };
 
@@ -493,8 +483,6 @@ void CClouds::Render_MaybeRenderMoon(float colorBalance) {
 }
 
 void CClouds::Update() {
-//    CCamera& TheCamera = *reinterpret_cast<CCamera*>(g_libGTASA + (VER_x32 ? 0x00951FA8 : 0xBBA8D0));
-//
 //    CloudRotation = std::sin(TheCamera.Orientation - 0.85f) * CWeather::Wind * 0.001f + CloudRotation;
 //    IndividualRotation += (int32)((CTimer::GetTimeStep() * CWeather::Wind * 0.5f + 0.3f) * 60.0f);
 }
@@ -526,8 +514,6 @@ void CClouds::VolumetricCloudsRender() {
 //            return;
 //        }
     }
-
-    CCamera& TheCamera = *reinterpret_cast<CCamera*>(g_libGTASA + (VER_x32 ? 0x00951FA8 : 0xBBA8D0));
 
     m_fVolumetricCloudDensity = 1.f;
 //    m_fVolumetricCloudDensity = [] {
@@ -711,8 +697,6 @@ void CClouds::VolumetricCloudsRender() {
 
 void CClouds::VolumetricClouds_Create(CVector *posn) {
     Log("VolumetricClouds_Create");
-
-    CCamera& TheCamera = *reinterpret_cast<CCamera*>(g_libGTASA + (VER_x32 ? 0x00951FA8 : 0xBBA8D0));
 
     using CGeneral::GetRandomNumberInRange;
 
@@ -927,8 +911,6 @@ void CClouds::MovingFog_Update() {
     if (MovingFog_GetFXIntensity() == 0.f)
         return;
 
-    CCamera& TheCamera = *reinterpret_cast<CCamera*>(g_libGTASA + (VER_x32 ? 0x00951FA8 : 0xBBA8D0));
-
     CVector camPos = TheCamera.GetPosition();
     for (int32 i = 0; i < MAX_MOVING_FOG; i++) {
         if (!ms_mf.m_bFogSlots[i]) {
@@ -970,8 +952,6 @@ int32 CClouds::MovingFog_GetFirstFreeSlot() {
 }
 
 void CClouds::MovingFogRender() {
-    CCamera& TheCamera = *reinterpret_cast<CCamera*>(g_libGTASA + (VER_x32 ? 0x00951FA8 : 0xBBA8D0));
-
     if (MovingFog_GetFXIntensity() == 0.f || !CGame::CanSeeOutSideFromCurrArea())
         return;
 
@@ -1064,8 +1044,6 @@ void CClouds::RenderBottomFromHeight() {
     * but it isn't complete...
     ****** */
 
-//    CCamera& TheCamera = *reinterpret_cast<CCamera*>(g_libGTASA + (VER_x32 ? 0x00951FA8 : 0xBBA8D0));
-//
 //    const auto camPos = TheCamera.GetPosition();
 //    if (camPos.z < -90.f) { // 0x71557D [Moved up here]
 //        return;
@@ -1150,8 +1128,6 @@ int32 CClouds::VolumetricClouds_GetFirstFreeSlot() {
 
 void CClouds::RenderSkyPolys() {
     CVector norm{}, pos{};
-
-    CCamera& TheCamera = *reinterpret_cast<CCamera*>(g_libGTASA + (VER_x32 ? 0x00951FA8 : 0xBBA8D0));
     if (TheCamera.m_matrix) {
         pos = TheCamera.m_matrix->GetPosition();
         norm = TheCamera.m_matrix->GetForward();

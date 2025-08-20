@@ -147,8 +147,6 @@ void CShadows::CalcPedShadowValues(CVector sunPosn, float& displacementX, float&
 void CShadows::StoreCarLightShadow(CVehicle* vehicle, int32 id, RwTexture* texture, CVector* posn, float frontX, float frontY, float sideX, float sideY, uint8 red, uint8 green, uint8 blue, float maxViewAngleCosine) {
     auto needTex = texture;
 
-    CCamera& TheCamera = *reinterpret_cast<CCamera*>(g_libGTASA + (VER_x32 ? 0x00951FA8 : 0xBBA8D0));
-
     // Maximum distance (from camera to `posn`) after which shadows aren't stored (and rendered)
     constexpr auto MAX_CAM_TO_LIGHT_DIST = 35.f;
 

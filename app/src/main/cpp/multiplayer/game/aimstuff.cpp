@@ -114,8 +114,6 @@ void GameAimSyncInit()
 {
     DLOG("GameAimSyncInit");
 
-    CCamera& TheCamera = *reinterpret_cast<CCamera*>(g_libGTASA + (VER_x32 ? 0x00951FA8 : 0xBBA8D0));
-    
 	pbyteCameraMode = (uint16_t *) &TheCamera.m_aCams[0].m_nMode;
 	pcaInternalAim = GameGetInternalAim();
 	pfCameraExtZoom = &TheCamera.m_aCams[0].FOV;

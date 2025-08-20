@@ -224,8 +224,6 @@ void CVehicle::DoHeadLightBeam(eVehicleDummy dummyId, CMatrix* matrix, bool isRi
     if (pVehicle)
         pVehicle->ProcessHeadlightsColor(r, g, b);
 
-    CCamera& TheCamera = *reinterpret_cast<CCamera*>(g_libGTASA + (VER_x32 ? 0x00951FA8 : 0xBBA8D0));
-
     auto mi = CModelInfo::GetVehicleModelInfo(m_nModelIndex);
     CVector pointModelSpace = mi->GetModelDummyPosition(static_cast<eVehicleDummy>(2 * dummyId));
     if (dummyId == DUMMY_LIGHT_REAR_MAIN && pointModelSpace.IsZero())

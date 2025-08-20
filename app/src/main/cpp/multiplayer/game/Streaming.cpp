@@ -378,8 +378,6 @@ void CStreaming::Update() {
     const double clampedDeltaTime = std::min(0.1, deltaTime);
     TextureDatabaseRuntime::UpdateStreaming(clampedDeltaTime, true);
 
-    CCamera& TheCamera = *reinterpret_cast<CCamera*>(g_libGTASA + (VER_x32 ? 0x00951FA8 : 0xBBA8D0));
-
     const auto& camPos = TheCamera.GetPosition();
     const float fCamDistanceToGroundZ = camPos.z - TheCamera.CalculateGroundHeight(eGroundHeightType::ENTITY_BB_BOTTOM);
     if (!ms_disableStreaming && !CRenderer::m_loadingPriority) {
@@ -902,7 +900,6 @@ void CStreaming::DeleteRwObjectsBehindCamera(size_t memoryToCleanInBytes) {
     const auto START_OFFSET_XY = 10;
     const auto END_OFFSET_XY = 2;
 
-    CCamera& TheCamera = *reinterpret_cast<CCamera*>(g_libGTASA + (VER_x32 ? 0x00951FA8 : 0xBBA8D0));
     const CVector& cameraPos = TheCamera.GetPosition();
     const int32 pointSecX = CWorld::GetSectorX(cameraPos.x),
             pointSecY = CWorld::GetSectorY(cameraPos.y);
@@ -1173,7 +1170,6 @@ bool CStreaming::RemoveLeastUsedModel(int32 streamingFlags) {
         }
     }
 
-    CCamera& TheCamera = *reinterpret_cast<CCamera*>(g_libGTASA + (VER_x32 ? 0x00951FA8 : 0xBBA8D0));
     if (TheCamera.GetPosition().z - TheCamera.CalculateGroundHeight(eGroundHeightType::ENTITY_BB_BOTTOM) > 50.0f
         && (
                 ms_numPedsLoaded > 4

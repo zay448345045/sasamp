@@ -1213,7 +1213,6 @@ void CCam__Process_hook(CCam* thiz)
     CVector vecSpeed;
     CVehicleSamp* veh = nullptr;
 
-    CCamera& TheCamera = *reinterpret_cast<CCamera*>(g_libGTASA + (VER_x32 ? 0x00951FA8 : 0xBBA8D0));
     float& CAR_FOV_START_SPEED = *(float*)(g_libGTASA + (VER_x32 ? 0x006A9FD0 : 0x8855D4));
     float old = CAR_FOV_START_SPEED;
 
