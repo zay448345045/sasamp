@@ -15,6 +15,7 @@
 #include "Shadows.h"
 #include "Entity/Vehicle/Automobile.h"
 #include "util/TextRasterizer/TextRasterizer.h"
+#include "cHandlingDataMgr.h"
 
 CVehicleSamp::CVehicleSamp(int iType, float fPosX, float fPosY, float fPosZ, float fRotation, bool bSiren)
 {
@@ -573,38 +574,25 @@ CCollisionData* GetCollisionDataFromModel(int nModelIndex)
     return modelInfo->m_pColModel->m_pColData;
 }
 
-void CVehicleSamp::SetHandlingData()
-{
-    if (!m_pVehicle || !m_dwGTAId)
-    {
+void CVehicleSamp::SetHandlingData() {
+    if (!m_pVehicle || !m_dwGTAId) {
         return;
     }
-    if (!GamePool_Vehicle_GetAt(m_dwGTAId))
-    {
+    if (!GamePool_Vehicle_GetAt(m_dwGTAId)) {
         return;
     }
 
-    if (GetVehicleSubtype() != VEHICLE_SUBTYPE_CAR && !m_pVehicle->IsTrailer())
-    {
+    if (GetVehicleSubtype() != VEHICLE_SUBTYPE_CAR && !m_pVehicle->IsTrailer()) {
         return;
     }
 
-
-    if (!m_pCustomHandling)
-    {
-        m_pCustomHandling = new tHandlingData;
-    }
-
-    auto pModel = CModelInfo::GetVehicleModelInfo(m_pVehicle->m_nModelIndex);
-
-    if (!pModel)
-    {
+    const auto& mi = CModelInfo::GetVehicleModelInfo(m_pVehicle->m_nModelIndex);
+    if (!mi) {
         return;
     }
 
-    CHandlingDefault::GetDefaultHandling(pModel->m_nHandlingId, m_pCustomHandling);
-
-    //bool bNeedRecalculate = false;
+    delete m_pCustomHandling;
+    m_pCustomHandling = CHandlingDefault::GetCopyDefaultHandling(mi->m_nHandlingId);
 
     for (auto& i : m_msLastSyncHandling)
     {
@@ -686,27 +674,26 @@ void CVehicleSamp::SetHandlingData()
 
     }
 
-    auto fDefaultFrontWheelSize = pModel->m_fWheelSizeFront;
-    auto fDefaultRearWheelSize = pModel->m_fWheelSizeRear;
+    auto fDefaultFrontWheelSize = mi->m_fWheelSizeFront;
+    auto fDefaultRearWheelSize = mi->m_fWheelSizeRear;
 
     if(m_fWheelSize != 0.0f) {
-        pModel->m_fWheelSizeFront = m_fWheelSize;
-        pModel->m_fWheelSizeRear = m_fWheelSize;
+        mi->m_fWheelSizeFront = m_fWheelSize;
+        mi->m_fWheelSizeRear = m_fWheelSize;
     } else {
-        m_fWheelSize = pModel->m_fWheelSizeFront;
+        m_fWheelSize = mi->m_fWheelSizeFront;
     }
 
     m_fDefaultWheelSize = std::max(fDefaultFrontWheelSize, fDefaultRearWheelSize);
 
-    ((void (*)(int, tHandlingData*))(g_libGTASA + (VER_x32 ? 0x00570DC8 + 1 : 0x69343C)))(0, m_pCustomHandling);
+    cHandlingDataMgr::ConvertDataToGameUnits(m_pCustomHandling);
     m_pVehicle->m_pHandlingData = m_pCustomHandling;
 
     ((void (*)(CVehicle*))(g_libGTASA + (VER_x32 ? 0x0054EC38 + 1 : 0x66EE5C)))(m_pVehicle); // CAutomobile::SetupSuspensionLines
-
     CopyGlobalSuspensionLinesToPrivate();
 
-    pModel->m_fWheelSizeFront = fDefaultFrontWheelSize;
-    pModel->m_fWheelSizeRear = fDefaultRearWheelSize;
+    mi->m_fWheelSizeFront = fDefaultFrontWheelSize;
+    mi->m_fWheelSizeRear = fDefaultRearWheelSize;
 
     ((void (*)(CVehicle*))(g_libGTASA + (VER_x32 ? 0x0055F430 + 1 : 0x68036C)))(m_pVehicle); // process suspension
 }

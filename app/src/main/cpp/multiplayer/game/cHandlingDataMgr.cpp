@@ -1,78 +1,116 @@
 //
-// Created on 14.04.2023.
+// Created on Traw-GG 27.08.2025.
 //
 
 #include "cHandlingDataMgr.h"
 #include "CFileMgr.h"
 #include "main.h"
-#include "VehicleNames.h"
 #include "FileLoader.h"
 #include "util/patch.h"
+#include "Models/ModelInfo.h"
 #include <vector>
 #include <fstream>
 
-//std::vector<tHandlingData> cHandlingDataMgr::m_aHandlingData;
-//std::vector<tBikeHandlingData> cHandlingDataMgr::m_aBikeHandlingData;
-//std::vector<tFlyingHandlingData> cHandlingDataMgr::m_aFlyingHandlingData;
-//std::vector<tBoatHandlingData> cHandlingDataMgr::m_aBoatHandlingData;
+bool isHandlingLoaded = false;
 
-void cHandlingDataMgr::LoadHandlingData()
+void (*LoadHandlingData_orig)(defHandlingDataMgr *thiz);
+void cHandlingDataMgr::LoadHandlingData(defHandlingDataMgr *thiz)
 {
-    const auto pFile = CFileMgr::OpenFile("SAMP/handling.cfg", "rb");
+    CFileLoader::LoadVehicleObject();
 
-   // char line[500];
-    while (CFileLoader::LoadLine(pFile))
+    isHandlingLoaded = true;
+    LoadHandlingData_orig(thiz);
+    isHandlingLoaded = false;
+
+    const auto pFile = CFileMgr::OpenFile("SAMP/handling.cfg", "rb");
+    for (auto line = CFileLoader::LoadLine(pFile); line; line = CFileLoader::LoadLine(pFile))
     {
-        if (strlen(CFileLoader::ms_line) == 0 || CFileLoader::ms_line[0] == ';' || CFileLoader::ms_line[0] == '\r') {
+        std::string_view sv(line);
+        if (strncmp(line, ";the end", 8) == 0)
+            return;
+
+        if (strlen(line) == 0 || line[0] == ';') {
             // Пропустить комментарии и пустые строки
             continue;
         }
-        char name[32]{};
-        if (sscanf(CFileLoader::ms_line, "%31s", name, std::size(name)) != 1) { // FIX_BUGS: Sized string read
-            return;
-        }
-        const auto id = FindExactWord(name, &VehicleNames[0][0], std::size(VehicleNames[0]), std::size(VehicleNames));
-        if (id == -1) {
-            return; // Issue logged by `FindExactWord`, so no need to care about it here
-        }
-        switch (CFileLoader::ms_line[0]) {
+
+        switch (line[0]) {
             case ';': {
                 break; // Comment
             }
-            case '!': {
-                // bike
-                tBikeHandlingData d{};
-                d.InitFromData(id, CFileLoader::ms_line);
+                /*case '!': {
+                    // bike
+                    tBikeHandlingData d{};
+                    d.InitFromData(id, line);
 
-                m_aBikeHandling[id] = d;
-                break;
-            }
+                    m_aBikeHandling[id] = d;
+                    break;
+                }*/
             case '$': {
+                std::istringstream iss(line);
+                std::string firstSym;
+                std::string name;
+
+                iss >> firstSym;
+                if (!(iss >> name)) {
+                    continue;
+                }
+
+                auto id = FindExactWord(name.c_str());
+                if (id == -1) {
+                    continue;
+                }
+
+                Log("id: %d, name: %s", id, name.c_str());
+                // flying
                 tFlyingHandlingData d{};
-                d.InitFromData(id, CFileLoader::ms_line);
+                d.InitFromData(id, line);
 
                 m_aFlyingHandling[id] = d;
-                // flying
-                break;
+                continue;
             }
             case '%': {
+                std::istringstream iss(line);
+                std::string firstSym;
+                std::string name;
+
+                iss >> firstSym;
+                if (!(iss >> name)) {
+                    continue;
+                }
+
+                auto id = FindExactWord(name.c_str());
+                if (id == -1) {
+                    continue;
+                }
+
                 // boat
                 tBoatHandlingData d{};
-                d.InitFromData(id, CFileLoader::ms_line);
+                d.InitFromData(id, line);
 
                 m_aBoatHandling[id] = d;
                 break;
             }
-            default: {
-                tHandlingData d{};
-                d.InitFromData(id, CFileLoader::ms_line);
+                /*default: {
+                    tHandlingData d{};
+                    d.InitFromData(id, line);
 
-                m_aVehicleHandling[id] = d;
-                break;
-            }
+                    m_aVehicleHandling[id] = d;
+                    break;
+                }*/
         }
     }
     CFileMgr::CloseFile(pFile);
+}
+
+int32 cHandlingDataMgr::FindExactWord(const char* name) {
+    auto it = CVehicleNames::VehicleNames.find(name);
+    if (it != CVehicleNames::VehicleNames.end()) {
+        return it->second - 400;
+    }
+
+    Log("Can't find handling %s", name);
+    return -1;
 }
 
 int32 cHandlingDataMgr::FindExactWord(const char* name, const char* nameTable, uint32 entrySize, uint32 entryCount) {
@@ -145,61 +183,70 @@ int32 tHandlingData::InitFromData(int32 id, const char* line) {
 int32 tBoatHandlingData::InitFromData(int32 id, const char* line) {
     m_nVehicleId = id;
 
-    const auto n = sscanf(
-            line,
-            "%*s\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f",
-            &m_fThrustY,
-            &m_fThrustZ,
-            &m_fThrustAppZ,
-            &m_fAqPlaneForce,
-            &m_fAqPlaneLimit,
-            &m_fAqPlaneOffset,
-            &m_fWaveAudioMult,
+    std::istringstream iss(line);
+    std::string dummy;
+    iss >> dummy; // Пропускаем первое слово
 
-            &m_vecMoveRes.x,
-            &m_vecMoveRes.y,
-            &m_vecMoveRes.z,
+    std::string dummy2;
+    iss >> dummy2; // Пропускаем второе слово
 
-            &m_vecTurnRes.x,
-            &m_vecTurnRes.y,
-            &m_vecTurnRes.z,
+    iss >> m_fThrustY
+        >> m_fThrustZ
+        >> m_fThrustAppZ
+        >> m_fAqPlaneForce
+        >> m_fAqPlaneLimit
+        >> m_fAqPlaneOffset
+        >> m_fWaveAudioMult
+        >> m_vecMoveRes.x
+        >> m_vecMoveRes.y
+        >> m_vecMoveRes.z
+        >> m_vecTurnRes.x
+        >> m_vecTurnRes.y
+        >> m_vecTurnRes.z
+        >> m_fLookLRBehindCamHeight;
 
-            &m_fLookLRBehindCamHeight
-    );
-    return n == 14 ? -1 : n;
+    return iss.eof() ? -1 : 14 - static_cast<int32>(iss.tellg() / sizeof(float));
 }
 
 int32 tFlyingHandlingData::InitFromData(int32 id, const char* line) {
     m_nVehicleId = id;
 
-    const auto n = sscanf(
-            line,
-            "%*s\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f%*c\t%f\t%f\t%f\t%f\t%f\t%f\t%f",
-            &m_fThrust, // 1                                            ^^^ there's an extra `s` for the `RCRAIDER` that we have to ignore
-            &m_fThrustFallOff,
-            &m_fYaw,
-            &m_fYawStab,
-            &m_fSideSlip, // 5
-            &m_fRoll,
-            &m_fRollStab,
-            &m_fPitch,
-            &m_fPitchStab,
-            &m_fFormLift, // 10
-            &m_fAttackLift,
-            &m_fGearUpR,
-            &m_fGearDownL,
-            &m_fWindMult,
-            &m_fMoveRes, // 15
+    std::istringstream iss(line);
+    std::string dummy;
+    iss >> dummy; // Пропускаем первое слово
 
-            &m_vecTurnRes.x, // 16
-            &m_vecTurnRes.y,
-            &m_vecTurnRes.z,
+    std::string dummy2;
+    iss >> dummy2; // Пропускаем второе слово
 
-            &m_vecSpeedRes.x, // 19
-            &m_vecSpeedRes.y,
-            &m_vecSpeedRes.z
-    );
-    return n == 21 ? -1 : n;
+    // Для обработки случая с лишним символом 's' в RCRAIDER
+    if (dummy == "RCRAIDER") {
+        char extraChar;
+        iss >> extraChar; // Пропускаем лишний символ
+    }
+
+    iss >> m_fThrust
+        >> m_fThrustFallOff
+        >> m_fYaw
+        >> m_fYawStab
+        >> m_fSideSlip
+        >> m_fRoll
+        >> m_fRollStab
+        >> m_fPitch
+        >> m_fPitchStab
+        >> m_fFormLift
+        >> m_fAttackLift
+        >> m_fGearUpR
+        >> m_fGearDownL
+        >> m_fWindMult
+        >> m_fMoveRes
+        >> m_vecTurnRes.x
+        >> m_vecTurnRes.y
+        >> m_vecTurnRes.z
+        >> m_vecSpeedRes.x
+        >> m_vecSpeedRes.y
+        >> m_vecSpeedRes.z;
+
+    return iss.eof() ? -1 : 21 - static_cast<int32>(iss.tellg() / sizeof(float));
 }
 
 int32 tBikeHandlingData::InitFromData(int32 id, const char* line) {
@@ -224,65 +271,25 @@ int32 tBikeHandlingData::InitFromData(int32 id, const char* line) {
             &m_fWheelieStabMult,
             &m_fStoppieStabMult
     );
-   // gHandlingDataMgr.ConvertBikeDataToGameUnits(this);
+    // gHandlingDataMgr.ConvertBikeDataToGameUnits(this);
     return n == 15 ? -1 : n;
 }
 
 void cHandlingDataMgr::ConvertDataToGameUnits(tHandlingData* h) {
-    const auto t = &h->GetTransmission();
+    CHook::CallFunction<void>(g_libGTASA + (VER_x32 ? 0x00570DC8 + 1 : 0x69343C), 0, h);
+}
 
-    t->m_fEngineAcceleration *= ACCEL_CONST;
-    t->m_fMaxGearVelocity *= VELOCITY_CONST;
-    h->m_fBrakeDeceleration *= ACCEL_CONST;
-    h->m_fMassRecpr = 1.f / h->m_fMass;
-    h->m_fBuoyancyConstant = h->m_fMass * 0.8f / (float)h->m_nPercentSubmerged;
-    h->m_fCollisionDamageMultiplier *= h->m_fMassRecpr * 2000.f;
-
-    auto maxVelocity{ t->m_fMaxGearVelocity };
-    while (maxVelocity > 0.f) {
-        maxVelocity -= 0.01f;
-
-        const auto maxVelocitySq = maxVelocity * maxVelocity;
-        const auto v = h->m_fDragMult >= 0.01f
-                       ? h->m_fDragMult / 1000.f * 0.5f * maxVelocitySq
-                       : -((1.f / (maxVelocitySq * h->m_fDragMult + 1.f) - 1.f) * maxVelocity);
-        if (t->m_fEngineAcceleration / 6.f < v) {
-            break;
-        }
-    }
-
-    std::tie(t->m_fMaxVelocity, t->m_maxReverseGearVelocity) = [&]() -> std::tuple<float, float> {
-        if (h->m_nVehicleId == 38) { // RC Bandit
-            return { t->m_fMaxGearVelocity, -t->m_fMaxGearVelocity };
-        }
-
-        if (h->m_bUseMaxspLimit) {
-            const auto v = t->m_fMaxGearVelocity / 1.2f;
-            return { v, std::min(-0.2f, v * -0.25f) };
-        }
-
-        t->m_fMaxGearVelocity = maxVelocity * 1.2f;
-
-        if (h->m_nVehicleId >= 162 && h->m_nVehicleId <= 174) {
-            return { maxVelocity, -0.05f };
-        } else {
-            return { maxVelocity, std::min(-0.2f, maxVelocity * -0.3f) };
-        }
-    }();
-
-    t->m_fEngineAcceleration /= (t->m_nDriveType == '4') ? 4.f : 2.f;
-
-    t->InitGearRatios();
+void cHandlingDataMgr::ConvertBikeDataToGameUnits(tBikeHandlingData* h) {
+    CHook::CallFunction<void>(g_libGTASA + (VER_x32 ? 0x00571008 + 1 : 0x69368C), 0, h);
 }
 
 // get handling id by name
 int32 cHandlingDataMgr::GetHandlingId(const char* nameToFind) {
-
-    for (int i = 0; i < std::size(VehicleNames); i++) {
-        if (strcmp(VehicleNames[i], nameToFind) == 0) {
-            return i;
-        }
+    auto it = CVehicleNames::VehicleNames.find(nameToFind);
+    if (it != CVehicleNames::VehicleNames.end()) {
+        return it->second - 400;
     }
+
     DLOG("Can't find handling %s", nameToFind);
     return 0;
 }
@@ -312,9 +319,25 @@ int32 GetHandlingId_hooked(uintptr* thiz, const char* nameToFind) {
     return cHandlingDataMgr::GetHandlingId(nameToFind);
 }
 
+tFlyingHandlingData* (*defHandlingDataMgr__GetFlyingPointer_orig)(defHandlingDataMgr* thiz, uint8 plane);
+tFlyingHandlingData* defHandlingDataMgr__GetFlyingPointer(defHandlingDataMgr* thiz, uint8 plane) {
+    if (isHandlingLoaded) {
+        return defHandlingDataMgr__GetFlyingPointer_orig(thiz, plane);
+    }
+    return cHandlingDataMgr::GetFlyingPointer(plane);
+}
+
+tBoatHandlingData* (*defHandlingDataMgr__GetBoatPointer_orig)(defHandlingDataMgr* thiz, uint8 boat);
+tBoatHandlingData* defHandlingDataMgr__GetBoatPointer(defHandlingDataMgr* thiz, uint8 boat) {
+    if (isHandlingLoaded) {
+        return defHandlingDataMgr__GetBoatPointer_orig(thiz, boat);
+    }
+    return cHandlingDataMgr::GetBoatPointer(boat);
+}
+
 void cHandlingDataMgr::InjectHooks() {
     CHook::Redirect("_ZN16cHandlingDataMgr13GetHandlingIdEPKc", &GetHandlingId_hooked);
-//    CHook::Redirect("_ZN16cHandlingDataMgr16LoadHandlingDataEv", &LoadHandlingData);
-//    CHook::Redirect("_ZN16cHandlingDataMgr14GetBoatPointerEh", &GetBoatPointer);
-//    CHook::Redirect("_ZN16cHandlingDataMgr16GetFlyingPointerEh", &GetFlyingPointer);
+    CHook::InlineHook("_ZN16cHandlingDataMgr16LoadHandlingDataEv", &LoadHandlingData, &LoadHandlingData_orig);
+    CHook::InlineHook("_ZN16cHandlingDataMgr14GetBoatPointerEh", &defHandlingDataMgr__GetBoatPointer, &defHandlingDataMgr__GetBoatPointer_orig);
+    CHook::InlineHook("_ZN16cHandlingDataMgr16GetFlyingPointerEh", &defHandlingDataMgr__GetFlyingPointer, &defHandlingDataMgr__GetFlyingPointer_orig);
 }
