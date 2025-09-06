@@ -8,6 +8,7 @@
 #include "FileLoader.h"
 #include "util/patch.h"
 #include "Models/ModelInfo.h"
+#include "CHandlingDefault.h"
 #include <vector>
 #include <fstream>
 
@@ -22,12 +23,15 @@ void cHandlingDataMgr::LoadHandlingData(defHandlingDataMgr *thiz)
     LoadHandlingData_orig(thiz);
     isHandlingLoaded = false;
 
-    const auto pFile = CFileMgr::OpenFile("SAMP/handling.cfg", "rb");
-    for (auto line = CFileLoader::LoadLine(pFile); line; line = CFileLoader::LoadLine(pFile))
+    char filePath[256];
+    snprintf(filePath, sizeof(filePath), "%sSAMP/handling.cfg", g_pszStorage);
+    FILE* file = fopen(filePath, "rb");
+
+    char line[300];
+    while (fgets(line, sizeof(line), file))
     {
-        std::string_view sv(line);
         if (strncmp(line, ";the end", 8) == 0)
-            return;
+            break;
 
         if (strlen(line) == 0 || line[0] == ';') {
             // Пропустить комментарии и пустые строки
@@ -35,17 +39,33 @@ void cHandlingDataMgr::LoadHandlingData(defHandlingDataMgr *thiz)
         }
 
         switch (line[0]) {
-            case ';': {
-                break; // Comment
-            }
-                /*case '!': {
-                    // bike
-                    tBikeHandlingData d{};
-                    d.InitFromData(id, line);
+            case '!': {
+                std::istringstream iss(line);
+                std::string firstSym;
+                std::string name;
 
-                    m_aBikeHandling[id] = d;
-                    break;
-                }*/
+                iss >> firstSym;
+                if (!(iss >> name)) {
+                    continue;
+                }
+
+                auto id = FindExactWord(name.c_str());
+                if (id == -1) {
+                    continue;
+                }
+
+                // bike
+                tBikeHandlingData d{};
+                d.InitFromData(id, line);
+
+                m_aBikeHandling[id] = d;
+                //if (id >= 0 && id < thiz->m_aBikeHandling.size()) {
+                //    memcpy(&thiz->m_aBikeHandling[id], &d, sizeof(tHandlingData));
+                //}
+                CHandlingDefault::FillDefaultBikeHandling(id, &d);
+                cHandlingDataMgr::ConvertBikeDataToGameUnits(&d);
+                break;
+            }
             case '$': {
                 std::istringstream iss(line);
                 std::string firstSym;
@@ -61,12 +81,14 @@ void cHandlingDataMgr::LoadHandlingData(defHandlingDataMgr *thiz)
                     continue;
                 }
 
-                Log("id: %d, name: %s", id, name.c_str());
                 // flying
                 tFlyingHandlingData d{};
                 d.InitFromData(id, line);
 
                 m_aFlyingHandling[id] = d;
+                //if (id >= 0 && id < thiz->m_aFlyingHandling.size()) {
+                //    memcpy(&thiz->m_aFlyingHandling[id], &d, sizeof(tHandlingData));
+                //}
                 continue;
             }
             case '%': {
@@ -89,18 +111,42 @@ void cHandlingDataMgr::LoadHandlingData(defHandlingDataMgr *thiz)
                 d.InitFromData(id, line);
 
                 m_aBoatHandling[id] = d;
+                //if (id >= 0 && id < thiz->m_aBoatHandling.size()) {
+                //    memcpy(&thiz->m_aBoatHandling[id], &d, sizeof(tHandlingData));
+                //}
                 break;
             }
-                /*default: {
-                    tHandlingData d{};
-                    d.InitFromData(id, line);
-
-                    m_aVehicleHandling[id] = d;
+                /*case '^': {
+                    CVehicleAnimGroupData::LoadAGroupFromData(line);
                     break;
                 }*/
+            default: {
+                std::istringstream iss(line);
+                std::string name;
+
+                if (!(iss >> name)) {
+                    continue;
+                }
+
+                auto id = FindExactWord(name.c_str());
+                if (id == -1) {
+                    continue;
+                }
+
+                tHandlingData d{};
+                d.InitFromData(id, line);
+
+                m_aVehicleHandling[id] = d;
+                //if (id >= 0 && id < thiz->m_aVehicleHandling.size()) {
+                //    memcpy(&thiz->m_aVehicleHandling[id], &d, sizeof(tHandlingData));
+                //}
+                CHandlingDefault::FillDefaultHandling(id, &d);
+                cHandlingDataMgr::ConvertDataToGameUnits(&d);
+                break;
+            }
         }
     }
-    CFileMgr::CloseFile(pFile);
+    fclose(file);
 }
 
 int32 cHandlingDataMgr::FindExactWord(const char* name) {
@@ -126,161 +172,215 @@ int32 cHandlingDataMgr::FindExactWord(const char* name, const char* nameTable, u
 
 int32 tHandlingData::InitFromData(int32 id, const char* line) {
     m_nVehicleId = id;
-    Log("InitFromData veh %d, line = %s", id, line);
-    const auto n = sscanf(
-            line,
-            "%*s %f %f %f%f\t%f\t%f\t%hhu\t%f\t%f\t%f\t%hhu\t%f\t%f\t%f\t%c\t%c\t%f\t%f\t%hhu\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%d\t%x\t%x\t%hhu\t%hhu\t%hhu",
-            &m_fMass, // 1
-            &m_fTurnMass,
-            &m_fDragMult,
 
-            &m_vecCentreOfMass.x, // 4
-            &m_vecCentreOfMass.y,
-            &m_vecCentreOfMass.z,
+    const char* p = line;
+    while (*p && !isspace(*p)) p++;
+    while (*p && isspace(*p)) p++;
 
-            &m_nPercentSubmerged, // 7
+    char driveTypeChar, engineTypeChar;
+    int absTemp;
+    unsigned int modelFlags, handlingFlags;
+    unsigned int frontLights, rearLights, animGroup;
 
-            &m_fTractionMultiplier, // 8
-            &m_fTractionLoss,
-            &m_fTractionBias,
+    int scanned = sscanf(p, "%f %f %f %f %f %f %d %f %f %f %d %f %f %f %c %c %f %f %d %f %f %f %f %f %f %f %f %f %f %d %x %x %d %d %d",
+                         &m_fMass,
+                         &m_fTurnMass,
+                         &m_fDragMult,
+                         &m_vecCentreOfMass.x,
+                         &m_vecCentreOfMass.y,
+                         &m_vecCentreOfMass.z,
+                         &m_nPercentSubmerged,
+                         &m_fTractionMultiplier,
+                         &m_fTractionLoss,
+                         &m_fTractionBias,
+                         &m_transmissionData.m_nNumberOfGears,
+                         &m_transmissionData.m_fMaxGearVelocity,
+                         &m_transmissionData.m_fEngineAcceleration,
+                         &m_transmissionData.m_fEngineInertia,
+                         &driveTypeChar,
+                         &engineTypeChar,
+                         &m_fBrakeDeceleration,
+                         &m_fBrakeBias,
+                         &absTemp,
+                         &m_fSteeringLock,
+                         &m_fSuspensionForceLevel,
+                         &m_fSuspensionDampingLevel,
+                         &m_fSuspensionHighSpdComDamp,
+                         &m_fSuspensionUpperLimit,
+                         &m_fSuspensionLowerLimit,
+                         &m_fSuspensionBiasBetweenFrontAndRear,
+                         &m_fSuspensionAntiDiveMultiplier,
+                         &m_fSeatOffsetDistance,
+                         &m_fCollisionDamageMultiplier,
+                         &m_nMonetaryValue,
+                         &modelFlags,
+                         &handlingFlags,
+                         &frontLights,
+                         &rearLights,
+                         &animGroup);
 
-            &m_transmissionData.m_nNumberOfGears, // 11
-            &m_transmissionData.m_fMaxGearVelocity,
-            &m_transmissionData.m_fEngineAcceleration,
-            &m_transmissionData.m_fEngineInertia,
-            &m_transmissionData.m_nDriveType,
-            &m_transmissionData.m_nEngineType,
+    m_transmissionData.m_nDriveType = driveTypeChar;
+    m_transmissionData.m_nEngineType = engineTypeChar;
+    m_bABS = (absTemp != 0);
 
-            &m_fBrakeDeceleration, // 18
-            &m_fBrakeBias,
-            &m_bABS,
-            &m_fSteeringLock,
-            &m_fSuspensionForceLevel,
+    m_nModelFlags = static_cast<eVehicleHandlingModelFlags>(modelFlags);
+    m_nHandlingFlags = static_cast<eVehicleHandlingFlags>(handlingFlags);
+    m_nFrontLights = static_cast<eVehicleLightsSize>(frontLights);
+    m_nRearLights = static_cast<eVehicleLightsSize>(rearLights);
+    m_nAnimGroup = animGroup;
 
-            &m_fSuspensionDampingLevel, // 22
-            &m_fSuspensionHighSpdComDamp,
-            &m_fSuspensionUpperLimit,
-            &m_fSuspensionLowerLimit,
-            &m_fSuspensionBiasBetweenFrontAndRear,
-            &m_fSuspensionAntiDiveMultiplier,
-
-            &m_fSeatOffsetDistance,
-            &m_fCollisionDamageMultiplier,
-
-            &m_nMonetaryValue, // 31
-            &m_nModelFlags,
-            &m_nHandlingFlags,
-            &m_nFrontLights,
-            &m_nRearLights,
-            &m_nAnimGroup
-    );
     m_transmissionData.m_handlingFlags = m_nHandlingFlags;
     m_transmissionData.m_fEngineAcceleration *= 0.4f;
-    cHandlingDataMgr::ConvertDataToGameUnits(this);
-    return n == 35 ? -1 : n;
+
+    return (scanned == 35) ? 0 : -1;
 }
 
 int32 tBoatHandlingData::InitFromData(int32 id, const char* line) {
     m_nVehicleId = id;
 
-    std::istringstream iss(line);
-    std::string dummy;
-    iss >> dummy; // Пропускаем первое слово
+    const char* p = line;
+    while (*p && !isspace(*p)) p++;
+    while (*p && isspace(*p)) p++;
+    while (*p && !isspace(*p)) p++;
+    while (*p && isspace(*p)) p++;
 
-    std::string dummy2;
-    iss >> dummy2; // Пропускаем второе слово
+    int scanned = sscanf(p, "%f %f %f %f %f %f %f %f %f %f %f %f %f %f",
+                         &m_fThrustY,
+                         &m_fThrustZ,
+                         &m_fThrustAppZ,
+                         &m_fAqPlaneForce,
+                         &m_fAqPlaneLimit,
+                         &m_fAqPlaneOffset,
+                         &m_fWaveAudioMult,
+                         &m_vecMoveRes.x,
+                         &m_vecMoveRes.y,
+                         &m_vecMoveRes.z,
+                         &m_vecTurnRes.x,
+                         &m_vecTurnRes.y,
+                         &m_vecTurnRes.z,
+                         &m_fLookLRBehindCamHeight);
 
-    iss >> m_fThrustY
-        >> m_fThrustZ
-        >> m_fThrustAppZ
-        >> m_fAqPlaneForce
-        >> m_fAqPlaneLimit
-        >> m_fAqPlaneOffset
-        >> m_fWaveAudioMult
-        >> m_vecMoveRes.x
-        >> m_vecMoveRes.y
-        >> m_vecMoveRes.z
-        >> m_vecTurnRes.x
-        >> m_vecTurnRes.y
-        >> m_vecTurnRes.z
-        >> m_fLookLRBehindCamHeight;
-
-    return iss.eof() ? -1 : 14 - static_cast<int32>(iss.tellg() / sizeof(float));
+    return (scanned == 14) ? 0 : -1;
 }
 
 int32 tFlyingHandlingData::InitFromData(int32 id, const char* line) {
     m_nVehicleId = id;
 
-    std::istringstream iss(line);
-    std::string dummy;
-    iss >> dummy; // Пропускаем первое слово
+    const char* p = line;
 
-    std::string dummy2;
-    iss >> dummy2; // Пропускаем второе слово
+    while (*p && !isspace(*p)) p++;
+    while (*p && isspace(*p)) p++;
+    while (*p && !isspace(*p)) p++;
+    while (*p && isspace(*p)) p++;
 
-    // Для обработки случая с лишним символом 's' в RCRAIDER
-    if (dummy == "RCRAIDER") {
-        char extraChar;
-        iss >> extraChar; // Пропускаем лишний символ
-    }
+    int scanned = sscanf(p, "%f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f",
+                         &m_fThrust,
+                         &m_fThrustFallOff,
+                         &m_fYaw,
+                         &m_fYawStab,
+                         &m_fSideSlip,
+                         &m_fRoll,
+                         &m_fRollStab,
+                         &m_fPitch,
+                         &m_fPitchStab,
+                         &m_fFormLift,
+                         &m_fAttackLift,
+                         &m_fGearUpR,
+                         &m_fGearDownL,
+                         &m_fWindMult,
+                         &m_fMoveRes,
+                         &m_vecTurnRes.x,
+                         &m_vecTurnRes.y,
+                         &m_vecTurnRes.z,
+                         &m_vecSpeedRes.x,
+                         &m_vecSpeedRes.y,
+                         &m_vecSpeedRes.z);
 
-    iss >> m_fThrust
-        >> m_fThrustFallOff
-        >> m_fYaw
-        >> m_fYawStab
-        >> m_fSideSlip
-        >> m_fRoll
-        >> m_fRollStab
-        >> m_fPitch
-        >> m_fPitchStab
-        >> m_fFormLift
-        >> m_fAttackLift
-        >> m_fGearUpR
-        >> m_fGearDownL
-        >> m_fWindMult
-        >> m_fMoveRes
-        >> m_vecTurnRes.x
-        >> m_vecTurnRes.y
-        >> m_vecTurnRes.z
-        >> m_vecSpeedRes.x
-        >> m_vecSpeedRes.y
-        >> m_vecSpeedRes.z;
-
-    return iss.eof() ? -1 : 21 - static_cast<int32>(iss.tellg() / sizeof(float));
+    return (scanned == 21) ? 0 : -1;
 }
 
 int32 tBikeHandlingData::InitFromData(int32 id, const char* line) {
     m_nVehicleId = id;
 
-    const auto n = sscanf(
-            line,
-            "%*s\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f",
-            &m_fLeanFwdCOM,
-            &m_fLeanFwdForce,
-            &m_fLeanBakCOM,
-            &m_fLeanBakForce,
-            &m_fMaxLean,
-            &m_fFullAnimLean,
-            &m_fDesLean,
-            &m_fSpeedSteer,
-            &m_fSlipSteer,
-            &m_fNoPlayerCOMz,
-            &m_fWheelieAng,
-            &m_fStoppieAng,
-            &m_fWheelieSteer,
-            &m_fWheelieStabMult,
-            &m_fStoppieStabMult
-    );
-    // gHandlingDataMgr.ConvertBikeDataToGameUnits(this);
-    return n == 15 ? -1 : n;
+    const char* p = line;
+    while (*p && !isspace(*p)) p++;
+    while (*p && isspace(*p)) p++;
+    while (*p && !isspace(*p)) p++;
+    while (*p && isspace(*p)) p++;
+
+    int scanned = sscanf(p, "%f %f %f %f %f %f %f %f %f %f %f %f %f %f %f",
+                         &m_fLeanFwdCOM,
+                         &m_fLeanFwdForce,
+                         &m_fLeanBakCOM,
+                         &m_fLeanBakForce,
+                         &m_fMaxLean,
+                         &m_fFullAnimLean,
+                         &m_fDesLean,
+                         &m_fSpeedSteer,
+                         &m_fSlipSteer,
+                         &m_fNoPlayerCOMz,
+                         &m_fWheelieAng,
+                         &m_fStoppieAng,
+                         &m_fWheelieSteer,
+                         &m_fWheelieStabMult,
+                         &m_fStoppieStabMult);
+
+    return (scanned == 15) ? 0 : -1;
 }
 
 void cHandlingDataMgr::ConvertDataToGameUnits(tHandlingData* h) {
-    CHook::CallFunction<void>(g_libGTASA + (VER_x32 ? 0x00570DC8 + 1 : 0x69343C), 0, h);
+    const auto t = &h->GetTransmission();
+
+    t->m_fEngineAcceleration *= ACCEL_CONST;
+    t->m_fMaxGearVelocity *= VELOCITY_CONST;
+    h->m_fBrakeDeceleration *= ACCEL_CONST;
+    h->m_fMassRecpr = 1.f / h->m_fMass;
+    h->m_fBuoyancyConstant = h->m_fMass * 0.8f / (float)h->m_nPercentSubmerged;
+    h->m_fCollisionDamageMultiplier = (h->m_fCollisionDamageMultiplier * 2000.f) / h->m_fMass;
+
+    auto engineAccelLimit = t->m_fEngineAcceleration / 6.f;
+    auto maxVelocity      = t->m_fMaxGearVelocity;
+    while (maxVelocity > 0.f) {
+        maxVelocity -= 0.01f;
+        if (h->m_fDragMult >= 0.01f) {
+            if ((sq(maxVelocity) * (h->m_fDragMult / 2.f) / 1000.f) <= engineAccelLimit) {
+                break;
+            }
+            continue;
+        }
+
+        auto fRecip = 1.f / (sq(maxVelocity) * h->m_fDragMult + 1.f);
+        if ((fRecip - 1.f) * -maxVelocity <= engineAccelLimit) {
+            break;
+        }
+    }
+
+    if (h->m_nVehicleId == VT_RCBANDIT) {
+        t->m_fMaxVelocity    = maxVelocity;
+        t->m_maxReverseGearVelocity = -maxVelocity;
+    } else if (h->m_bUseMaxspLimit) {
+        t->m_fMaxVelocity    = maxVelocity / 1.2f;
+        t->m_maxReverseGearVelocity = std::min(-t->m_fMaxVelocity / 4.f, -0.2f);
+    } else {
+        t->m_fMaxGearVelocity     = maxVelocity * 1.2f;
+        t->m_fMaxVelocity = maxVelocity;
+        if (GetBikeHandlingPointer(h->m_nVehicleId)) {
+            // 2 wheelers
+            t->m_maxReverseGearVelocity = -0.05f;
+        } else {
+            t->m_maxReverseGearVelocity = std::min(-maxVelocity * 0.3f, -0.2f);
+        }
+    }
+
+    t->m_fEngineAcceleration /= (t->m_nDriveType == '4') ? 4.f : 2.f;
+    t->InitGearRatios();
 }
 
-void cHandlingDataMgr::ConvertBikeDataToGameUnits(tBikeHandlingData* h) {
-    CHook::CallFunction<void>(g_libGTASA + (VER_x32 ? 0x00571008 + 1 : 0x69368C), 0, h);
+void cHandlingDataMgr::ConvertBikeDataToGameUnits(tBikeHandlingData* bikeHandling) {
+    bikeHandling->m_fMaxLean = sinf(DegreesToRadians(bikeHandling->m_fMaxLean));
+    bikeHandling->m_fFullAnimLean = DegreesToRadians(bikeHandling->m_fFullAnimLean);
+    bikeHandling->m_fWheelieAng = sinf(DegreesToRadians(bikeHandling->m_fWheelieAng));
+    bikeHandling->m_fStoppieAng = sinf(DegreesToRadians(bikeHandling->m_fStoppieAng));
 }
 
 // get handling id by name

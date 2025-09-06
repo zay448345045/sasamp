@@ -213,25 +213,6 @@ unsigned int MainMenuScreen__Update_hook(uintptr_t thiz, float a2)
 	return ret;
 }
 
-static char szLastBufferedName[40];
-int (*cHandlingDataMgr__FindExactWord)(uintptr_t thiz, char* line, char* nameTable, int entrySize, int entryCount);
-int cHandlingDataMgr__FindExactWord_hook(uintptr_t thiz, char* line, char* nameTable, int entrySize, int entryCount)
-{
-	//Log("dslkfjsakj = %s", nameTable[0]);
-	strncpy(&szLastBufferedName[0], line, entrySize);
-	return cHandlingDataMgr__FindExactWord(thiz, line, nameTable, entrySize, entryCount);
-}
-#include "cHandlingDataMgr.h"
-
-void cHandlingDataMgr__ConvertDataToGameUnits(uintptr_t *thiz, tHandlingData* handling)
-{
-	auto handlingId = cHandlingDataMgr::GetHandlingId(szLastBufferedName);
-
-	CHandlingDefault::FillDefaultHandling((uint16_t)handlingId, handling);
-
-	CHook::CallFunction<void>(g_libGTASA + (VER_x32 ? 0x00570DC8 + 1 : 0x69343C), thiz, handling);
-}
-
 int lastNvEvent;
 #include "..//nv_event.h"
 #include "ResourceCrypt/ResourceCrypt.h"
@@ -829,10 +810,6 @@ void InstallSpecialHooks()
 	CHook::Redirect("_ZN5CGame20InitialiseRenderWareEv", &CGame::InitialiseRenderWare);
 	CHook::InlineHook("_ZN14MainMenuScreen6UpdateEf", &MainMenuScreen__Update_hook, &MainMenuScreen__Update);
 	CHook::InlineHook("_Z11OS_FileOpen14OSFileDataAreaPPvPKc16OSFileAccessType", &OS_FileOpen_hook, &OS_FileOpen);
-
-	CHook::InlineHook("_ZN16cHandlingDataMgr13FindExactWordEPcS0_ii", &cHandlingDataMgr__FindExactWord_hook, &cHandlingDataMgr__FindExactWord);
-
-	CHook::InstallPLT(g_libGTASA + (VER_x32 ? 0x0067125C : 0x842150), &cHandlingDataMgr__ConvertDataToGameUnits);
 
 	CHook::InlineHook("_Z19NVEventGetNextEventP7NVEventi", NVEventGetNextEvent_hook, &NVEventGetNextEvent_hooked);
 

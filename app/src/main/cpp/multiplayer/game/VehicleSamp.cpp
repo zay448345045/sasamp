@@ -16,11 +16,11 @@
 #include "Entity/Vehicle/Automobile.h"
 #include "util/TextRasterizer/TextRasterizer.h"
 #include "cHandlingDataMgr.h"
+#include "Entity/Vehicle/Bike.h"
 
 CVehicleSamp::CVehicleSamp(int iType, float fPosX, float fPosY, float fPosZ, float fRotation, bool bSiren)
 {
     fPosZ += 0.25f;
-	RwMatrix mat;
 
     m_pDamageManager = nullptr;
 	m_pVehicle = nullptr;
@@ -86,10 +86,6 @@ CVehicleSamp::CVehicleSamp(int iType, float fPosX, float fPosY, float fPosZ, flo
 
 	bHasSuspensionLines = false;
 	m_pSuspensionLines = nullptr;
-	if (GetVehicleSubtype() == VEHICLE_SUBTYPE_CAR)
-	{
-		CopyGlobalSuspensionLinesToPrivate();
-	}
 
 	m_fWheelOffsetX = 0.0f;
 	m_fWheelOffsetY = 0.0f;
@@ -109,6 +105,8 @@ CVehicleSamp::CVehicleSamp(int iType, float fPosX, float fPosY, float fPosZ, flo
 		memcpy(&m_vInitialWheelMatrix[2], (const void*)&(pWheelRB->modelling), sizeof(RwMatrix));
 		memcpy(&m_vInitialWheelMatrix[3], (const void*)&(pWheelLB->modelling), sizeof(RwMatrix));
 	}
+
+    SetHandlingData();
 }
 
 void CVehicleSamp::ChangeDummyColor(const char* dummy, RwRGBA color) {
@@ -177,6 +175,11 @@ CVehicleSamp::~CVehicleSamp()
 		delete m_pCustomHandling;
 		m_pCustomHandling = nullptr;
 	}
+
+    if (m_pCustomBikeHandling) {
+        delete m_pCustomBikeHandling;
+        m_pCustomBikeHandling = nullptr;
+    }
 
 	if (bHasSuspensionLines && m_pSuspensionLines) {
 		delete[] m_pSuspensionLines;
@@ -574,18 +577,49 @@ CCollisionData* GetCollisionDataFromModel(int nModelIndex)
     return modelInfo->m_pColModel->m_pColData;
 }
 
-void CVehicleSamp::SetHandlingData() {
-    if (!m_pVehicle || !m_dwGTAId) {
-        return;
-    }
-    if (!GamePool_Vehicle_GetAt(m_dwGTAId)) {
-        return;
-    }
-
-    if (GetVehicleSubtype() != VEHICLE_SUBTYPE_CAR && !m_pVehicle->IsTrailer()) {
+void CVehicleSamp::SetBikeHandlingData() {
+    const auto& mi = CModelInfo::GetVehicleModelInfo(m_pVehicle->m_nModelIndex);
+    if (!mi) {
         return;
     }
 
+    delete m_pCustomHandling;
+    m_pCustomHandling = CHandlingDefault::GetCopyDefaultHandling(mi->m_nHandlingId);
+
+    cHandlingDataMgr::ConvertDataToGameUnits(m_pCustomHandling);
+    m_pVehicle->m_pHandlingData = m_pCustomHandling;
+
+    delete m_pCustomBikeHandling;
+    m_pCustomBikeHandling = CHandlingDefault::GetCopyBikeDefaultHandling(mi->m_nHandlingId);
+
+    cHandlingDataMgr::ConvertBikeDataToGameUnits(m_pCustomBikeHandling);
+    reinterpret_cast<CBike*>(m_pVehicle)->m_BikeHandling = m_pCustomBikeHandling;
+
+    CopyGlobalSuspensionLinesToPrivate();
+
+    CHook::CallFunction<void>("_ZN5CBike20SetupSuspensionLinesEv", reinterpret_cast<CBike*>(m_pVehicle));
+}
+
+void CVehicleSamp::SetHeliHandlingData() {
+    const auto& mi = CModelInfo::GetVehicleModelInfo(m_pVehicle->m_nModelIndex);
+    if (!mi) {
+        return;
+    }
+
+    delete m_pCustomHandling;
+    m_pCustomHandling = CHandlingDefault::GetCopyDefaultHandling(mi->m_nHandlingId);
+
+    cHandlingDataMgr::ConvertDataToGameUnits(m_pCustomHandling);
+    m_pVehicle->m_pHandlingData = m_pCustomHandling;
+
+    m_pVehicle->pFlyingHandling = cHandlingDataMgr::GetFlyingPointer(mi->m_nHandlingId);
+
+    CopyGlobalSuspensionLinesToPrivate();
+
+    ((void (*)(CVehicle*))(g_libGTASA + (VER_x32 ? 0x0055F430 + 1 : 0x68036C)))(m_pVehicle);
+}
+
+void CVehicleSamp::SetVehicleHandlingData() {
     const auto& mi = CModelInfo::GetVehicleModelInfo(m_pVehicle->m_nModelIndex);
     if (!mi) {
         return;
@@ -671,7 +705,6 @@ void CVehicleSamp::SetHandlingData() {
                 break;
             }
         }
-
     }
 
     auto fDefaultFrontWheelSize = mi->m_fWheelSizeFront;
@@ -695,9 +728,26 @@ void CVehicleSamp::SetHandlingData() {
     mi->m_fWheelSizeFront = fDefaultFrontWheelSize;
     mi->m_fWheelSizeRear = fDefaultRearWheelSize;
 
-    ((void (*)(CVehicle*))(g_libGTASA + (VER_x32 ? 0x0055F430 + 1 : 0x68036C)))(m_pVehicle); // process suspension
+    ((void (*)(CVehicle*))(g_libGTASA + (VER_x32 ? 0x0055F430 + 1 : 0x68036C)))(m_pVehicle);
 }
 
+void CVehicleSamp::SetHandlingData() {
+    switch (GetVehicleSubtype()) {
+        case VEHICLE_SUBTYPE_CAR:
+            SetVehicleHandlingData();
+            break;
+
+        case VEHICLE_SUBTYPE_BIKE:
+        case VEHICLE_SUBTYPE_PUSHBIKE:
+            SetBikeHandlingData();
+            break;
+
+        case VEHICLE_SUBTYPE_HELI:
+        case VEHICLE_SUBTYPE_PLANE:
+            SetHeliHandlingData();
+            break;
+    }
+}
 
 void CVehicleSamp::setPlate(ePlateType type, std::string& szNumber, std::string& szRegion)
 {
