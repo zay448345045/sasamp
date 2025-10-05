@@ -110,6 +110,15 @@ typedef enum RpGeometryLockMode RpGeometryLockMode;
 #define RpAtomicGetGeometry(_atomic) \
     RpAtomicGetGeometryMacro(_atomic)
 
+#define RpGeometryGetMaterialMacro(_geometry, _num)             \
+    (((_geometry)->matList.materials)[(_num)])
+
+#define RpGeometryGetNumMaterialsMacro(_geometry)               \
+    ((_geometry)->matList.numMaterials)
+
+#define RpGeometryGetNumMaterials(_geometry)                    \
+    RpGeometryGetNumMaterialsMacro(_geometry)
+
 #define RpMaterialGetColor(_material)                               \
     RpMaterialGetColorMacro(_material)
 
@@ -265,7 +274,7 @@ struct RpClump
     RwUInt16 pad;
 };
 
-static_assert(sizeof(RpClump) == (VER_x32 ? 0x30 : 0x60), "");
+static_assert(sizeof(RpClump) == (VER_x32 ? 0x30 : 0x60));
 
 /**
  * \ingroup rpatomic
@@ -550,7 +559,6 @@ enum rpLightPrivateFlag
 };
 typedef enum rpLightPrivateFlag rpLightPrivateFlag;
 
-#if (!defined(DOXYGEN))
 struct RpLight
 {
     RwObjectHasFrame    object; /**< object */
@@ -561,9 +569,8 @@ struct RpLight
     RwLLLink            inWorld; /**< inWorld */
     RwUInt16            lightFrame; /**< lightFrame */
     RwUInt8             isMainLight;
-    RwUInt8             pad;
+    RwUInt8            	pad;
 };
-#endif /* (!defined(DOXYGEN)) */
 static_assert(sizeof(RpLight) == (VER_x32 ? 0x40 : 0x68));
 
 /**
@@ -1084,6 +1091,7 @@ struct RpWorld
 RpClump* RpClumpForAllAtomics(RpClump* clump, RpAtomicCallBack callback, void* data);
 RpGeometry* RpGeometryForAllMaterials(RpGeometry* geometry, RpMaterialCallBack fpCallBack, void* data);
 RwBool RpClumpDestroy(RpClump* clump);
+RpClump* RpClumpRender(RpClump* clump);
 RpLight* RpLightCreate(RwInt32 type);
 RwBool RpLightDestroy(RpLight* light);
 RpWorld* RpWorldCreate(RwBBox* boundingBox);
@@ -1093,4 +1101,14 @@ RpAtomic* AtomicDefaultRenderCallBack(RpAtomic* atomic);
 RpWorld* RpWorldAddLight(RpWorld* world, RpLight* light);
 RpWorld* RpWorldRemoveLight(RpWorld* world, RpLight* light);
 RwBool RpAtomicDestroy(RpAtomic* atomic);
+RwTexDictionary* RwTexDictionaryForAllTextures(RwTexDictionary* dict, RwTextureCallBack fpCallBack, void *pData);
+RwBool RwTexDictionaryDestroy(RwTexDictionary* dict);
+RwTexture* RwTexDictionaryRemoveTexture(RwTexture* texture);
+RpMaterial* RpMaterialSetTexture(RpMaterial* material, RwTexture* texture);
 void RpClumpGtaCancelStream();
+RpClump* RpClumpRemoveAtomic(RpClump* clump, RpAtomic* atomic);
+RpAtomic* RpAtomicSetFrame(RpAtomic* atomic, RwFrame* frame);
+RwBool RpAtomicInstance(RpAtomic* atomic);
+RwFrame* RwFrameTransform(RwFrame *frame, const RwMatrix *transform, RwOpCombineType combineOp);
+RpClump* RpClumpStreamRead(RwStream* stream);
+RpAtomic* RpAtomicClone(RpAtomic* atomic);

@@ -7,7 +7,7 @@
 #include "Quaternion.h"
 #include "PedSamp.h"
 #include "VehicleSamp.h"
-#include "ObjectSamp.h"
+#include "Samp/ObjectSamp.h"
 #include "font.h"
 #include "scripting.h"
 #include "radarcolors.h"

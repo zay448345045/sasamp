@@ -16,7 +16,7 @@
 #include "net/netgame.h"
 #include "Pools.h"
 #include "Streaming.h"
-#include "ObjectSamp.h"
+#include "Samp/ObjectSamp.h"
 #include "game.h"
 #include "SkyBox.h"
 

@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include <stdint.h>
+#include <cstdint>
 
 #define rwPI            ((RwReal)(3.1415926535f))
 #define rwPIOVER2       (rwPI / (RwReal)(2.0f))
@@ -79,6 +79,7 @@ struct RwV3d
     RwReal y;   /**< Y value */
     RwReal z;   /**< Z value */
 };
+static_assert(sizeof(RwV3d) == 0xC);
 
 /* ------------------------------ RwRect -------------------------*/
 typedef struct RwRect RwRect;

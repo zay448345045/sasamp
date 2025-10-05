@@ -11,6 +11,7 @@
 #include "game/Models/AtomicModelInfo.h"
 #include "Streaming.h"
 #include "cHandlingDataMgr.h"
+#include "Samp/BuildingRemoval.h"
 
 // Load line into static buffer (`ms_line`)
 char* CFileLoader::LoadLine(FILE* file) {
@@ -170,9 +171,26 @@ CEntity* CFileLoader::LoadObjectInstance1(const char* line) {
     return LoadObjectInstance(&instance, modelName);
 }
 
+CEntity* (*LoadObjectInstance_FileObjectInstance)(CFileObjectInstance* pObject, const uint8_t* pName);
+CEntity* LoadObjectInstance_FileObjectInstance_hook(CFileObjectInstance* pObject, const uint8_t* pName) {
+
+    for (int i = 0; i < CBuildingRemoval::m_TotalRemovedObjects; i++) {
+        const auto buildingInfo = CBuildingRemoval::m_RemoveBuildings[i];
+        if (pObject->m_nModelId == buildingInfo.modelId) {
+            float distance = CBuildingRemoval::GetDistanceBetween3DPoints(&pObject->m_vecPosition, &buildingInfo.position);
+            if (distance <= buildingInfo.radius) {
+                pObject->m_nModelId = 19300;
+                break;
+            }
+        }
+    }
+    return LoadObjectInstance_FileObjectInstance(pObject, pName);
+}
+
 void CFileLoader::InjectHooks() {
     CHook::Redirect("_ZN11CFileLoader10LoadObjectEPKc", &CFileLoader::LoadObject);
     CHook::Redirect("_ZN11CFileLoader18LoadObjectInstanceEPKc", &CFileLoader::LoadObjectInstance1);
+    CHook::InlineHook("_ZN11CFileLoader18LoadObjectInstanceEP19CFileObjectInstancePKc", &LoadObjectInstance_FileObjectInstance_hook, &LoadObjectInstance_FileObjectInstance);
 }
 
 CEntity *CFileLoader::LoadObjectInstance(CFileObjectInstance *objInstance, const char *modelName) {

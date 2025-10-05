@@ -7,8 +7,8 @@
 
 void CLines::RenderLineNoClipping(float startX, float startY, float startZ, float endX, float endY, float endZ, uint32 startColor, uint32 endColor) {
     RxObjSpace3DVertex vertices[] = {
-            { .objVertex = { startX, startY, startZ }, .color = startColor >> 8 | startColor << 24 },
-            { .objVertex = { endX,   endY,   endZ   }, .color =   endColor >> 8 | endColor   << 24 }
+            { .position = { startX, startY, startZ }, .color = CRGBA(startColor >> 8 | startColor << 24) },
+            { .position = { endX,   endY,   endZ   }, .color =   CRGBA(endColor >> 8 | endColor   << 24) }
     };
 
     LittleTest();

@@ -876,108 +876,196 @@ void ScrStopFlashGangZone(RPCParameters *rpcParams)
 	CGangZonePool::StopFlash(wZoneID);
 }
 
-int iTotalObjects = 0;
+#include <unordered_set>
+static std::unordered_set<std::string> g_failedTextures;
+static constexpr std::array texDbs = {"txd", "gta3", "gta_int", "samp"};
 
+RwTexture* ScriptLoadTexture(const char* texname)
+{
+    if (!texname)
+        return nullptr;
+
+    if (g_failedTextures.contains(texname))
+        return nullptr;
+
+    for (const auto& dbName : texDbs)
+    {
+        auto texture = CUtil::LoadTextureFromDB(dbName, texname);
+        if (texture != nullptr)
+        {
+            DLOG("%s loaded from %s", texname, dbName);
+            return texture;
+        }
+        else continue;
+    }
+
+    g_failedTextures.insert(texname);
+    DLOG("-> Texture %s not found!", texname);
+    return nullptr;
+}
+
+int iTotalObjects = 0;
 void ScrCreateObject(RPCParameters* rpcParams)
 {
-    LOGRPC("ScrCreateObject");
-	unsigned char* Data = reinterpret_cast<unsigned char*>(rpcParams->input);
-	int iBitLength = rpcParams->numberOfBitsOfData;
+    unsigned char* Data = reinterpret_cast<unsigned char*>(rpcParams->input);
+    int iBitLength = rpcParams->numberOfBitsOfData;
 
-	uint16_t wObjectID;
-	uint32 ModelID;
-	float fDrawDistance;
-	CVector vecPos, vecRot;
+    uint16_t wObjectID;
+    uint32_t ModelID;
+    float fDrawDistance;
+    CVector vecPos, vecRot;
+    // Material Text
+    uint8_t byteMaterialSize;
+    uint8_t byteFontNameLength;
+    char szFontName[32];
+    uint8_t byteFontSize;
+    uint8_t byteFontBold;
+    uint32_t dwFontColor;
+    uint32_t dwBackgroundColor;
+    uint8_t byteAlign;
+    char szText[2048];
+    uint8_t byteMatType;
+    uint8_t id;
 
-	uint8_t bNoCameraCol;
-	int16_t attachedVehicleID;
-	int16_t attachedObjectID;
-	CVector vecAttachedOffset;
-	CVector vecAttachedRotation;
-	uint8_t bSyncRot;
-	uint8_t iMaterialCount;
+    uint8_t bNoCameraCol;
+    int16_t attachedVehicleID;
+    int16_t attachedObjectID;
+    CVector vecAttachedOffset;
+    CVector vecAttachedRotation;
+    uint8_t bSyncRot;
+    uint8_t iMaterialCount;
 
-	RakNet::BitStream bsData(Data, (iBitLength / 8) + 1, false);
-	bsData.Read(wObjectID);
-	bsData.Read(ModelID);
-	bsData.Read(vecPos.x);
-	bsData.Read(vecPos.y);
-	bsData.Read(vecPos.z);
+    RakNet::BitStream bsData(Data, (iBitLength / 8) + 1, false);
+    bsData.Read(wObjectID);
+    bsData.Read(ModelID);
+    bsData.Read(vecPos.x);
+    bsData.Read(vecPos.y);
+    bsData.Read(vecPos.z);
 
-	bsData.Read(vecRot.x);
-	bsData.Read(vecRot.y);
-	bsData.Read(vecRot.z);
+    LOGRPC("ScrCreateObject(%d) %d", iTotalObjects, ModelID);
 
-	bsData.Read(fDrawDistance);
+    bsData.Read(vecRot.x);
+    bsData.Read(vecRot.y);
+    bsData.Read(vecRot.z);
 
-	bsData.Read(bNoCameraCol);
-	bsData.Read(attachedVehicleID);
-	bsData.Read(attachedObjectID);
-	if (attachedObjectID != -1 || attachedVehicleID != -1)
-	{
-		bsData.Read(vecAttachedOffset);
-		bsData.Read(vecAttachedRotation);
-		bsData.Read(bSyncRot);
-	}
-	bsData.Read(iMaterialCount);
+    bsData.Read(fDrawDistance);
 
-	iTotalObjects++;
-	//Log("ID: %d, model: %d. iTotalObjects = %d", wObjectID, ModelID, iTotalObjects);
+    bsData.Read(bNoCameraCol);
+    bsData.Read(attachedVehicleID);
+    bsData.Read(attachedObjectID);
+    if (attachedObjectID != -1 || attachedVehicleID != -1) {
+        bsData.Read(vecAttachedOffset);
+        bsData.Read(vecAttachedRotation);
+        bsData.Read(bSyncRot);
+    }
+    bsData.Read(iMaterialCount);
 
-	CObjectPool::New(wObjectID, ModelID, vecPos, vecRot, fDrawDistance);
+    iTotalObjects++;
+    //Log("ID: %d, model: %d. iTotalObjects = %d", wObjectID, ModelID, iTotalObjects);
 
-	CObjectSamp* pObject = CObjectPool::GetAt(wObjectID);
-	if (!pObject) return;
-	if (attachedVehicleID != -1)
-	{
-		pObject->AttachToVehicle(attachedVehicleID, &vecAttachedOffset, &vecAttachedRotation);
-	}
-	if (iMaterialCount > 0)
-	{
-		for (int i = 0; i < iMaterialCount; i++)
-		{
-			uint16_t modelId;
-			uint8_t libLength, texLength;
-			uint8_t id;
-			bsData.Read(id);
-			if (id == 2) continue;
-			uint8_t slot;
-			bsData.Read(slot);
-			bsData.Read(modelId);
+    if (!CStreaming::TryLoadModel(ModelID)) {
+        Log("Model %d not loaded", ModelID);
+        return;
+    }
 
-			bsData.Read(libLength);
-			char* str = new char[libLength + 1];
-			bsData.Read(str, libLength);
-			str[libLength] = 0;
+    CObjectPool::New(wObjectID, ModelID, vecPos, vecRot, fDrawDistance);
 
-			bsData.Read(texLength);
-			char* tex = new char[texLength + 1];
-			bsData.Read(tex, texLength);
-			tex[texLength] = 0;
+    CObjectSamp* pObject = CObjectPool::GetAt(wObjectID);
+    if (!pObject) return;
+    if (attachedVehicleID != -1) {
+        pObject->AttachToVehicle(attachedVehicleID, &vecAttachedOffset, &vecAttachedRotation);
+    }
+    if (iMaterialCount > 0) {
+        for (int i = 0; i < iMaterialCount; i++) {
+            memset(szFontName, 0, sizeof(szFontName));
+            memset(szText, 0, sizeof(szText));
+            bsData.Read(byteMatType);
 
-			uint32_t col;
-			bsData.Read(col);
+            if (byteMatType == 1) {
+                uint16_t modelId;
+                uint8_t libLength, texLength;
 
-			union color
-			{
-				uint32_t dwColor;
-				uint8_t cols[4];
-			};
+                bsData.Read(id);
+                if (id == 2) continue;
+                uint8_t slot;
+                bsData.Read(slot);
+                bsData.Read(modelId);
 
-			color rightColor;
-			rightColor.dwColor = col;
-			uint8_t temp = rightColor.cols[0];
-			rightColor.cols[0] = rightColor.cols[2];
-			rightColor.cols[2] = temp;
-			col = rightColor.dwColor;
+                bsData.Read(libLength);
+                char str[libLength + 1];
+                bsData.Read(str, libLength);
 
-			if (modelId < 0 || modelId > 20000)
-			{
-				modelId = 18631;
-			}
-		}
-	}
+                bsData.Read(texLength);
+                char tex[texLength + 1];
+                bsData.Read(tex, texLength);
 
+                tex[texLength] = 0;
+                str[libLength] = 0;
+
+                if (modelId < 0 || modelId > 20000)
+                    modelId = INVALID_MODEL_ID;
+
+                if (!CStreaming::TryLoadModel(modelId))
+                    return;
+
+                if (slot > MAX_MATERIALS)
+                    return;
+
+                // Material Object
+                if (pObject->m_pMaterials[slot].m_bCreated && pObject->m_pMaterials[slot].pTex) {
+                    pObject->m_pMaterials[slot].m_bCreated = 0;
+                    RwTextureDestroy(pObject->m_pMaterials[slot].pTex);
+                    pObject->m_pMaterials[slot].pTex = nullptr;
+                }
+                pObject->m_bMaterials = true;
+                pObject->m_pMaterials[slot].wModelID = modelId;
+                pObject->m_pMaterials[slot].pTex = ScriptLoadTexture(tex);
+                pObject->m_pMaterials[slot].m_bCreated = 1;
+
+                if (!strncmp(tex, "materialtext1", sizeof(("materialtext1"))))
+                    strcpy(tex, "MaterialText1");
+
+                if (!strncmp(tex, "sampblack", sizeof(("sampblack"))))
+                    strcpy(tex, "SAMPBlack");
+
+                if (!strncmp(tex, "carpet19-128x128", sizeof(("carpet19-128x128"))))
+                    strcpy(tex, "Carpet19-128x128");
+
+                if (!pObject->m_pMaterials[slot].pTex && strncmp(tex, "none", sizeof(("none"))))
+                    pObject->m_pMaterials[slot].pTex = ScriptLoadTexture(tex);
+
+                bsData.Read(pObject->m_pMaterials[i].dwColor);
+            }
+            if (byteMatType == 2) {
+                uint8_t byteMaterialIndex = 0;
+                uint8_t byteMaterialSize;
+                uint8_t byteFontNameLength;
+                char szFontName[32];
+                uint8_t byteFontSize;
+                uint8_t byteFontBold;
+                uint32_t dwFontColor;
+                uint32_t dwBackgroundColor;
+                uint8_t byteAlign;
+                char szText[2048];
+
+                bsData.Read(byteMaterialIndex);
+                bsData.Read(byteMaterialSize);
+                bsData.Read(byteFontNameLength);
+                bsData.Read(szFontName, byteFontNameLength);
+                szFontName[byteFontNameLength] = '\0';
+                bsData.Read(byteFontSize);
+                bsData.Read(byteFontBold);
+                bsData.Read(dwFontColor);
+                bsData.Read(dwBackgroundColor);
+                bsData.Read(byteAlign);
+                stringCompressor->DecodeString(szText, 2048, &bsData);
+
+                if (strlen(szFontName) <= 32) {
+                    pObject->SetMaterialText(byteMaterialIndex, byteMaterialSize, szFontName, byteFontSize, byteFontBold, dwFontColor, dwBackgroundColor, byteAlign, szText);
+                }
+            }
+        }
+    }
 }
 
 void ScrDestroyObject(RPCParameters *rpcParams)
@@ -1469,49 +1557,116 @@ void ScrSetPlayerAttachedObject(RPCParameters* rpcParams)
 void ScrSetPlayerObjectMaterial(RPCParameters* rpcParams)
 {
     LOGRPC("ScrSetPlayerObjectMaterial");
-	unsigned char* Data = reinterpret_cast<unsigned char*>(rpcParams->input);
-	int iBitLength = rpcParams->numberOfBitsOfData;
+    unsigned char* Data = reinterpret_cast<unsigned char*>(rpcParams->input);
+    int iBitLength = rpcParams->numberOfBitsOfData;
 
-	uint16_t wObjectID;
-	int16_t modelId;
-	uint8_t materialType, matId, libLength, texLength;
-	RakNet::BitStream bsData(Data, (iBitLength / 8) + 1, false);
-	bsData.Read(wObjectID);
-	bsData.Read(materialType);
-	bsData.Read(matId);
-	if (materialType == 2) return;
-	bsData.Read(modelId);
-	bsData.Read(libLength);
-	char* str = new char[libLength + 1];
-	bsData.Read(str, libLength);
-	str[libLength] = 0;
-	bsData.Read(texLength);
-	char* tex = new char[texLength + 1];
-	bsData.Read(tex, texLength);
-	uint32_t col;
-	bsData.Read(col);
-	tex[texLength] = 0;
-	CObjectSamp* pObj = CObjectPool::GetAt(wObjectID);
-	if (!pObj) return;
+    uint16_t wObjectID;
+    int16_t modelId;
+    uint8_t materialType, matId, libLength, texLength;
+    RakNet::BitStream bsData(Data, (iBitLength / 8) + 1, false);
+    bsData.Read(wObjectID);
+    bsData.Read(materialType);
+    bsData.Read(matId);
 
-	union color
-	{
-		uint32_t dwColor;
-		uint8_t cols[4];
-	};
+    if (materialType == 2) {
+        uint8_t byteMaterialSize;
+        uint8_t byteFontNameLength;
+        char szFontName[32];
+        uint8_t byteFontSize;
+        uint8_t byteFontBold;
+        uint32_t dwFontColor;
+        uint32_t dwBackgroundColor;
+        uint8_t byteAlign;
+        char szText[2048];
 
-	color rightColor;
-	rightColor.dwColor = col;
-	uint8_t temp = rightColor.cols[0];
-	rightColor.cols[0] = rightColor.cols[2];
-	rightColor.cols[2] = temp;
-	col = rightColor.dwColor;
+        bsData.Read(byteMaterialSize);
+        bsData.Read(byteFontNameLength);
+        bsData.Read(szFontName, byteFontNameLength);
+        szFontName[byteFontNameLength] = '\0';
+        bsData.Read(byteFontSize);
+        bsData.Read(byteFontBold);
+        bsData.Read(dwFontColor);
+        bsData.Read(dwBackgroundColor);
+        bsData.Read(byteAlign);
+        stringCompressor->DecodeString(szText, 2048, &bsData);
 
+        if (strlen(szFontName) <= 32) {
+            CObjectSamp* pObject = CObjectPool::GetAt(wObjectID);
+            if (pObject) {
+                pObject->SetMaterialText(matId, byteMaterialSize, szFontName, byteFontSize, byteFontBold, dwFontColor, dwBackgroundColor, byteAlign, szText);
+            }
+        }
+        return;
+    }
 
-	if (modelId < 0 || modelId > 20000)
-	{
-		modelId = 18631;
-	}
+    bsData.Read(modelId);
+    bsData.Read(libLength);
+    char str[libLength + 1];
+    bsData.Read(str, libLength);
+    str[libLength] = 0;
+    bsData.Read(texLength);
+    char tex[texLength + 1];
+    bsData.Read(tex, texLength);
+    uint32_t col;
+    bsData.Read(col);
+    tex[texLength] = 0;
+
+    CObjectSamp* pObj = CObjectPool::GetAt(wObjectID);
+    if (!pObj) return;
+
+    union color
+    {
+        uint32_t dwColor;
+        uint8_t cols[4];
+    };
+
+    color rightColor{};
+    rightColor.dwColor = col;
+    uint8_t temp = rightColor.cols[0];
+    rightColor.cols[0] = rightColor.cols[2];
+    rightColor.cols[2] = temp;
+    col = rightColor.dwColor;
+
+    if (modelId == -1) {
+        pObj->m_bMaterials = true;
+        pObj->m_pMaterials[matId].m_bCreated = true;
+        pObj->m_pMaterials[matId].wModelID = 0xFFFF;
+        pObj->m_pMaterials[matId].pTex = nullptr;
+        pObj->m_pMaterials[matId].dwColor = col;
+        return;
+    }
+
+    if (modelId < 0 || modelId > 20000)
+        modelId = INVALID_MODEL_ID;
+
+    if (!CStreaming::TryLoadModel(modelId))
+        return;
+
+    if (matId > MAX_MATERIALS)
+        return;
+
+    if (pObj->m_pMaterials[matId].m_bCreated && pObj->m_pMaterials[matId].pTex) {
+        pObj->m_pMaterials[matId].m_bCreated = 0;
+        RwTextureDestroy(pObj->m_pMaterials[matId].pTex);
+        pObj->m_pMaterials[matId].pTex = nullptr;
+    }
+    pObj->m_bMaterials = true;
+    pObj->m_pMaterials[matId].m_bCreated = true;
+    pObj->m_pMaterials[matId].wModelID = modelId;
+    pObj->m_pMaterials[matId].pTex = ScriptLoadTexture(tex);
+    pObj->m_pMaterials[matId].dwColor = col;
+
+    if (!strncmp(tex, "materialtext1", sizeof(("materialtext1"))))
+        strcpy(tex, "MaterialText1");
+
+    if (!strncmp(tex, "sampblack", sizeof(("sampblack"))))
+        strcpy(tex, "SAMPBlack");
+
+    if (!strncmp(tex, "carpet19-128x128", sizeof(("carpet19-128x128"))))
+        strcpy(tex, "Carpet19-128x128");
+
+    if (!pObj->m_pMaterials[matId].pTex && strncmp(tex, "none", sizeof(("none"))) && strncmp(tex, "wall8", sizeof(("wall8"))))
+        pObj->m_pMaterials[matId].pTex = ScriptLoadTexture(tex);
 }
 
 void ScrSetVehicleZAngle(RPCParameters* rpcParams)

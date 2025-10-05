@@ -13,10 +13,6 @@
 #define RwFrameGetMatrix(_f)    RwFrameGetMatrixMacro(_f)
 #endif
 
-#define RwIm3DVertexGetPos(_vert) (&((_vert)->objVertex))
-#define RwIm3DVertexGetNormal(vert) (&((vert)->objNormal))
-
-
 //-----------------------------------------------------------
 
 #define RW_FRAME_NAME_LENGTH      23
@@ -49,28 +45,9 @@ static_assert(sizeof(RwFrame) == (VER_x32 ? 0xA4 : 0xC8));
 
 
 #include "raster.h"
-
-#define RwIm3DVertexSetRGBA(_vert, _r, _g, _b, _a) \
-MACRO_START \
-{ \
-    ((_vert)->color = ((_a) << 24) | \
-                              ((_r) << 16) | \
-                              ((_g) << 8) | \
-                              ((_b))); \
-} \
-MACRO_STOP
+#include "pipe/pip2model.h"
 
 class TextureDatabaseEntry;
-
-/* Us and Vs */
-#define RxObjSpace3DLitVertexGetU(_vert) \
-    ((_vert)->u)
-#define RxObjSpace3DLitVertexGetV(_vert) \
-    ((_vert)->v)
-#define RxObjSpace3DLitVertexSetU(_vert, _imu) \
-    ((_vert)->u = (_imu))
-#define RxObjSpace3DLitVertexSetV(_vert, _imv) \
-    ((_vert)->v = (_imv))
 
 #define RwCameraGetFrameMacro(_camera)                          \
     ((RwFrame *)rwObjectGetParent((_camera)))
@@ -100,15 +77,6 @@ class TextureDatabaseEntry;
 /****************************************************************************
  <macro/inline functionality
  */
-
-#define RwIm3DVertexSetPos(_vert, _imx, _imy, _imz) \
-MACRO_START \
-{ \
-    (_vert)->objVertex.x = _imx; \
-    (_vert)->objVertex.y = _imy; \
-    (_vert)->objVertex.z = _imz; \
-} \
-MACRO_STOP
 
 #define RwCameraSetFrameMacro(_camera, _frame)                  \
     (_rwObjectHasFrameSetFrame((_camera), (_frame)), (_camera))
@@ -582,6 +550,15 @@ static_assert(sizeof(RwTexture) == (VER_x32 ? 0x58 : 0x68));
 /* Type ID */
 #define rwTEXDICTIONARY 6
 
+typedef struct RwTexDictionary RwTexDictionary;
+
+struct RwTexDictionary
+{
+    RwObject            object; /* Homogeneous type */
+    RwLinkList          texturesInDict; /* List of textures in dictionary */
+    RwLLLink            lInInstance; /* Link list of all dicts in system */
+};
+
 /* Mipmap Name generation - maximum number of RwChar characters which can
  * be appended to the root name.
  */
@@ -853,51 +830,6 @@ enum RwIm3DTransformFlags
 };
 typedef enum RwIm3DTransformFlags RwIm3DTransformFlags;
 
-/****************************************************************************
- Global Types
- */
-
-/* We use D3D9 formats for the instanced versions, to allow hardware T&L */
-
-/*
- * Typedef for an RxObjSpace3DVertex.
- */
-typedef struct RxObjSpace3DVertex RxObjSpace3DVertex;
-
-/**
- * \ingroup cored3d9
- * \struct RxObjSpace3DVertex
- * Structure representing object space vertex.
- */
-struct RxObjSpace3DVertex
-{
-    RwV3d       objVertex;        /**< position */
-    RwV3d       objNormal;        /**< normal */
-    RwUInt32    color;            /**< emissive color*/
-    RwReal      u;                /**< u */
-    RwReal      v;                /**< v */
-};
-static_assert(sizeof(RxObjSpace3DVertex) == 0x24);
-
-/* This vertex is non truncatable */
-#define RxObjSpace3DVertexNoUVsNoNormalsSize (sizeof(RxObjSpace3DVertex))
-#define RxObjSpace3DVertexNoUVsSize          (sizeof(RxObjSpace3DVertex))
-#define RxObjSpace3DVertexFullSize           (sizeof(RxObjSpace3DVertex))
-
-/**
- * \ingroup cored3d9
- * \ref RxObjSpace3DLitVertex
- * Typedef for an RxObjSpace3DLitVertex.
- */
-typedef RxObjSpace3DVertex RxObjSpace3DLitVertex;
-
-/**
- * \ingroup cored3d9
- * \ref RwIm3DVertex
- * Typedef for an RwIm3DVertex.
- */
-typedef RxObjSpace3DLitVertex RwIm3DVertex;
-
 /* LEGACY-SUPPORT macro */
 /**
  * \ingroup cored3d9
@@ -906,51 +838,11 @@ typedef RxObjSpace3DLitVertex RwIm3DVertex;
  */
 typedef RwIm2DVertex RxScrSpace2DVertex;
 
+typedef RwFrame *(*RwFrameCallBack)(RwFrame *frame, void *data);
+
 /****************************************************************************
  Object-space 3D unlit vertex macros
  */
-
-/* Vertex positions */
-#define RxObjSpace3DVertexGetPos(_vert, _pos) \
-    (*(_pos) = (_vert)->objVertex)
-#define RxObjSpace3DVertexSetPos(_vert, _pos) \
-    ((_vert)->objVertex = *(_pos))
-
-/* Pre-lighting colours */
-#define RxObjSpace3DVertexGetPreLitColor(_vert, _col) \
-MACRO_START \
-{ \
-    (_col)->alpha = (RwUInt8)((_vert)->color >> 24) & 0xFF; \
-    (_col)->red   = (RwUInt8)((_vert)->color >> 16) & 0xFF; \
-    (_col)->green = (RwUInt8)((_vert)->color >>  8) & 0xFF; \
-    (_col)->blue  = (RwUInt8)((_vert)->color      ) & 0xFF; \
-} \
-MACRO_STOP
-
-#define RxObjSpace3DVertexSetPreLitColor(_vert, _col) \
-    ((_vert)->color = (((RwUInt32)(_col)->alpha) << 24) | \
-                              (((RwUInt32)(_col)->red)   << 16) | \
-                              (((RwUInt32)(_col)->green) <<  8) | \
-                              (((RwUInt32)(_col)->blue)       ))
-
-/* This uses the same slot as color (they are mutually exclusive) */
-#define RxObjSpace3DVertexGetColor RxObjSpace3DVertexGetPreLitColor
-
-/* Normals */
-#define RxObjSpace3DVertexGetNormal(_vert, _normal)             \
-    (*(_normal) = (_vert)->objNormal)
-#define RxObjSpace3DVertexSetNormal(_vert, _normal)             \
-    ((_vert)->objNormal = *(_normal))
-
-/* Us and Vs */
-#define RxObjSpace3DVertexGetU(_vert)                          \
-    ((_vert)->u)
-#define RxObjSpace3DVertexGetV(_vert)                          \
-    ((_vert)->v)
-#define RxObjSpace3DVertexSetU(_vert, _imu)                     \
-    ((_vert)->u = (_imu))
-#define RxObjSpace3DVertexSetV(_vert, _imv)                     \
-    ((_vert)->v = (_imv))
 
 RwFrame* RwFrameUpdateObjects(RwFrame* frame);
 RwTexture* RwTextureCreate(RwRaster* raster);
@@ -964,6 +856,7 @@ RwFrame* RwFrameRotate(RwFrame* frame, const RwV3d* axis, RwReal angle, RwOpComb
 RwCamera* RwCameraSetViewWindow(RwCamera* camera, const RwV2d* viewWindow);
 RwCamera* RwCameraSetProjection(RwCamera* camera, RwCameraProjection projection);
 RwMatrix* RwFrameGetLTM(RwFrame* frame);
+RwBool RsCameraBeginUpdate(RwCamera* camera);
 RwCamera* RwCameraEndUpdate(RwCamera* camera);
 RwBool RwIm3DEnd();
 RwBool RwIm3DRenderPrimitive(RwPrimitiveType primType);
@@ -979,4 +872,5 @@ RwFrame* RwFrameOrthoNormalize(RwFrame* frame);
 RwTexture* RwTextureSetName(RwTexture* texture, const RwChar* name);
 RwBool RwTextureSetFindCallBack(RwTextureCallBackFind callBack);
 RwBool RwTextureSetReadCallBack(RwTextureCallBackRead callBack);
-RwBool RsCameraBeginUpdate(RwCamera* camera);
+RwFrame* RwFrameForAllChildren(RwFrame* frame, RwFrameCallBack callBack, void* data);
+RwFrame* RwFrameScale(RwFrame* frame, const RwV3d* scale, RwOpCombineType combineOp);

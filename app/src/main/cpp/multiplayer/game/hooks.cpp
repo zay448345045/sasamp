@@ -1577,7 +1577,74 @@ long long CAnimBlendNode__FindKeyFrame_hook(CAnimBlendNode *thiz, float fCurrent
 }
 
 #include "../SkyBox.h"
+#include "StoredMaterials.h"
+
 int g_iLastRenderedObject;
+CStoredMaterials gStoredEntityMaterials;
+
+RwObject* RwFrameForAllObjectsCallback(RwObject* object, void* data) {
+    if (object->type != rpATOMIC)
+        return object;
+
+    const auto* atomic = reinterpret_cast<RpAtomic*>(object);
+    if (!atomic->geometry)
+        return object;
+
+    const auto* geometry = atomic->geometry;
+    const auto* pObject = reinterpret_cast<CObjectSamp*>(data);
+    if (!pObject)
+        return object;
+
+    const int numMaterials = std::min(geometry->matList.numMaterials, 16);
+    const auto materials = std::span(geometry->matList.materials, numMaterials);
+    const auto objMaterials = std::span(pObject->m_pMaterials, numMaterials);
+
+    std::transform(
+            materials.begin(), materials.end(),
+            objMaterials.begin(),
+            materials.begin(),
+            [](RpMaterial* material, const MaterialInfo& objMaterial) {
+                if (objMaterial.m_bCreated && objMaterial.pTex &&
+                    material && material->texture)
+                {
+                    gStoredEntityMaterials.Add(&material->texture);
+                    material->texture = objMaterial.pTex;
+                }
+                return material;
+            }
+    );
+
+    return object;
+}
+
+RwObject* ObjectMaterialTextCallBack(RwObject* object, void* data) {
+    const auto* pObject = reinterpret_cast<CObjectSamp*>(data);
+    if (!pObject || object->type != rpATOMIC)
+        return object;
+
+    const auto* atomic = reinterpret_cast<RpAtomic*>(object);
+    if (!atomic || !atomic->geometry || !pObject->m_MaterialTextTexture || atomic->object.object.type != 1)
+        return object;
+
+    RpGeometry* geometry = atomic->geometry;
+    const int numMaterials = std::clamp(geometry->matList.numMaterials, 0, 15);
+    if (numMaterials < 1)
+        return object;
+
+    const auto materials = std::span(geometry->matList.materials, numMaterials);
+    const auto textures = std::span(pObject->m_MaterialTextTexture, numMaterials);
+
+    std::transform(materials.begin(), materials.end(), textures.begin(), materials.begin(),
+                   [](RpMaterial* material, RwTexture* texture) {
+                       if (texture && material && material->texture) {
+                           gStoredEntityMaterials.Add(&material->texture);
+                           material->texture = texture;
+                       }
+                       return material;
+                   });
+
+    return object;
+}
 
 void(*CEntity__Render)(CEntity*);
 void CEntity__Render_hook(CEntity* entity) {
@@ -1588,11 +1655,37 @@ void CEntity__Render_hook(CEntity* entity) {
         }
 	}
 
+    if (!entity)
+        return;
+
+    const auto atomic = entity->m_pRwObject;
+    if (!atomic || !atomic->parent)
+        return;
+
+    const auto clump = entity->m_pRwClump;
+    if (!clump)
+        return;
+
     if ((entity->IsPed() || entity->IsObject()) && CMirrors::bRenderingReflection)
         return;
 
+    if (pNetGame && CLocalPlayer::GetPlayerPed()) {
+        if (CGame::GetGameInit() && entity->m_matrix) {
+            if (auto pObject = CObjectPool::GetObjectFromGtaPtr(entity)) {
+                if (pObject->m_bMaterials) {
+                    RwFrameForAllObjects((RwFrame*)atomic->parent, RwFrameForAllObjectsCallback, pObject);
+                }
+                if (pObject->m_bHasMaterialText) {
+                    RwFrameForAllObjects((RwFrame*)atomic->parent, ObjectMaterialTextCallBack, pObject);
+                }
+            }
+        }
+    }
+
     g_iLastRenderedObject = entity->m_nModelIndex;
     CEntity__Render(entity);
+
+    gStoredEntityMaterials.Reset();
 }
 
 void(*CFireManager__ExtinguishPointWithWater)(uintptr* thiz, CVector point, float fRadius, float fWaterStrength);

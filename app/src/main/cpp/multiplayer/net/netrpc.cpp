@@ -9,6 +9,7 @@
 #include "java_systems/ObjectEditor.h"
 #include "../game/Entity/Ped/Ped.h"
 #include "java_systems/GameFilesCheck.h"
+#include "Samp/BuildingRemoval.h"
 
 extern CNetGame *pNetGame;
 
@@ -691,8 +692,23 @@ void ScmEvent(RPCParameters* rpcParams)
 
 void RemoveBuilding(RPCParameters* rpcParams)
 {
-	//
+    RakNet::BitStream bsData(reinterpret_cast<unsigned char *>(rpcParams->input), (rpcParams->numberOfBitsOfData / 8) + 1, false);
+
+    uint32_t modelId;
+    CVector pos;
+    float radius;
+
+    bsData.Read(modelId);
+    bsData.Read((char*)& pos, sizeof(CVector));
+    bsData.Read(radius);
+    if (CBuildingRemoval::m_TotalRemovedObjects <  CBuildingRemoval::MAX_REMOVALS) {
+        CBuildingRemoval::m_RemoveBuildings[CBuildingRemoval::m_TotalRemovedObjects] = {modelId, pos, radius};
+        CBuildingRemoval::m_TotalRemovedObjects++;
+    }
+
+    CBuildingRemoval::ProcessRemoveBuilding(modelId, pos, radius);
 }
+
 #include "..//gui/gui.h"
 #include "../playertags.h"
 #include "java_systems/Tab.h"

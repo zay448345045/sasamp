@@ -28,7 +28,7 @@
  *
  ************************************************************************/
 
-#include <stdint.h>
+#include <cstdint>
 #include "types.h"
 
 /* Structure alignment */
@@ -344,12 +344,15 @@ typedef struct RwTexCoords RwTexCoords;
       ((RwFastRealToUInt32(green)) << 8) |                         \
       ((RwFastRealToUInt32(blue)))))
 
-#define RwIm2DVertexSetIntRGBA(vert, red, green, blue, alpha)   \
-    ((vert)->emissiveColor =                                    \
-     ((((RwUInt32)(alpha)) << 24) |                             \
-      (((RwUInt32)(red)) << 16) |                               \
-      (((RwUInt32)(green)) << 8) |                              \
-      (((RwUInt32)(blue)))))
+#define RwIm2DVertexSetIntRGBA(vert, red, green, blue, alpha)           \
+MACRO_START                                                             \
+{                                                                       \
+    ((vert)->r = ((unsigned char)(red)  ));                             \
+    ((vert)->g = ((unsigned char)(green)));                             \
+    ((vert)->b = ((unsigned char)(blue) ));                             \
+    ((vert)->a = ((unsigned char)(alpha)));                             \
+}                                                                       \
+MACRO_STOP
 
 #define RwIm2DVertexGetRed(vert)    \
     (((vert)->emissiveColor >> 16) & 0xFF)
@@ -560,6 +563,18 @@ static_assert(sizeof(RwMatrixTag) == 0x40);
 
 typedef RwMatrixTag RwMatrix;
 
+#if (!defined(RwMatrixCopyMacro))
+#define RwMatrixCopyMacro(_target, _source)             \
+    ( *(_target) = *(_source) )
+#endif /* (!defined(RwMatrixCopyMacro)) */
+
+void RwMatrixCopy(RwMatrix* dstMatrix, const RwMatrix* srcMatrix);
+#define RwMatrixCopy(dst, src)   RwMatrixCopyMacro(dst, src)
+
+/* Update */
+#define rwMatrixSetFlags(m, flagsbit)     ((m)->flags = (flagsbit))
+#define rwMatrixGetFlags(m)               ((m)->flags)
+#define rwMatrixTestFlags(m, flagsbit)    ((m)->flags & (RwInt32)(flagsbit))
 
 RwMatrix* RwMatrixUpdate(RwMatrix* matrix);
 RwBool RwMatrixDestroy(RwMatrix* mpMat);
@@ -572,3 +587,8 @@ RwMatrix* RwMatrixCreate();
 RwV3d* RwV3dTransformPoint(RwV3d* pointOut, const RwV3d* pointIn, const RwMatrix* matrix);
 RwV3d* RwV3dTransformPoints(RwV3d* pointsOut, const RwV3d* pointsIn, RwInt32 numPoints, const RwMatrix* matrix);
 RwMatrix* RwMatrixRotate(RwMatrix* pMat, class CVector* axis, float angle);
+RwMatrix* RwMatrixTranslate(RwMatrix *matrix, const RwV3d *translation, RwOpCombineType combineOp);
+RwV3d* RwV3dTransformVector(RwV3d* vectorOut, const RwV3d* vectorIn, const RwMatrix* matrix);
+RwReal RwV3dNormalize(RwV3d* out, const RwV3d* in);
+RwMatrix* RwMatrixMultiply(RwMatrix* matrixOut, const RwMatrix* MatrixIn1, const RwMatrix* matrixIn2);
+RwBool RwStreamFindChunk(RwStream* stream, RwUInt32 type, RwUInt32* lengthOut, RwUInt32* versionOut);

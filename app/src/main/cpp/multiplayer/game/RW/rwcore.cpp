@@ -54,7 +54,11 @@ void _rwObjectHasFrameSetFrame(void *object, RwFrame *frame) {
 }
 
 RwMatrix* RwFrameGetLTM(RwFrame* frame) {
-    return CHook::CallFunction<RwMatrix*>(g_libGTASA + (VER_x32 ? 0x001D849C + 1 : 0x26FE10), frame);
+    return CHook::CallFunction<RwMatrix*>("_Z13RwFrameGetLTMP7RwFrame", frame);
+}
+
+RwBool RsCameraBeginUpdate(RwCamera* camera) {
+    return CHook::CallFunction<RwBool>("_Z19RsCameraBeginUpdateP8RwCamera", camera);
 }
 
 RwCamera* RwCameraEndUpdate(RwCamera* camera) {
@@ -83,6 +87,10 @@ RwTexture* RwTextureRead(const char* name, const char* maskName) {
 
 RwFrame* RwFrameForAllObjects(RwFrame* frame, RwObjectCallBack callBack, void* data) {
     return CHook::CallFunction<RwFrame*>(g_libGTASA + (VER_x32 ? 0x001D8858 + 1 : 0x2703BC), frame, callBack, data);
+}
+
+RwFrame* RwFrameForAllChildren(RwFrame* frame, RwFrameCallBack callBack, void* data) {
+    return CHook::CallFunction<RwFrame*>("_Z21RwFrameForAllChildrenP7RwFramePFS0_S0_PvES1_", frame, callBack, data);
 }
 
 RwBool RwFrameDestroy(RwFrame* frame) {
@@ -118,6 +126,6 @@ RwBool RwTextureSetReadCallBack(RwTextureCallBackRead callBack) {
     return CHook::CallFunction<RwBool>(g_libGTASA + (VER_x32 ? 0x1DB3E0 + 1 : 0x273AFC), callBack);
 }
 
-RwBool RsCameraBeginUpdate(RwCamera* camera) {
-    return CHook::CallFunction<RwBool>("_Z19RsCameraBeginUpdateP8RwCamera", camera);
+RwFrame* RwFrameScale(RwFrame* frame, const RwV3d* scale, RwOpCombineType combineOp) {
+    return CHook::CallFunction<RwFrame*>("_Z12RwFrameScaleP7RwFramePK5RwV3d15RwOpCombineType", frame, scale, combineOp);
 }

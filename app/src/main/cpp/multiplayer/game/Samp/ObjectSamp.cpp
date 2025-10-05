@@ -4,6 +4,8 @@
 #include "util/patch.h"
 #include "Timer.h"
 #include "game/Models/ModelInfo.h"
+#include "MaterialText.h"
+#include "World.h"
 #include <cmath>
 
 float fixAngle(float angle)
@@ -20,22 +22,34 @@ float subAngle(float a1, float a2)
 
 CObjectSamp::CObjectSamp(int iModel, float fPosX, float fPosY, float fPosZ, CVector vecRot, float fDrawDistance)
 {
-	if(!CModelInfo::GetModelInfo(iModel))
-		iModel = 18631; // вопросик
+	if (!CModelInfo::GetModelInfo(iModel))
+		iModel = INVALID_MODEL_ID;
 
-	m_pEntity 			= 0;
+	m_pEntity 			= nullptr;
 	m_dwGTAId 			= 0;
 
-	ScriptCommand(&create_object, iModel, fPosX, fPosY, fPosZ, &m_dwGTAId);
-	ScriptCommand(&put_object_at, m_dwGTAId, fPosX, fPosY, fPosZ);
+    ScriptCommand(&create_object, iModel, fPosX, fPosY, fPosZ, &m_dwGTAId);
+    ScriptCommand(&put_object_at, m_dwGTAId, fPosX, fPosY, fPosZ);
 
-	m_pEntity = GamePool_Object_GetAt(m_dwGTAId);
+    m_pEntity = GamePool_Object_GetAt(m_dwGTAId);
 
 	m_bIsPlayerSurfing = false;
 	m_bNeedRotate = false;
 
 	m_bAttachedType = eObjectAttachType::NONE;
 	m_usAttachedVehicle = 0xFFFF;
+
+    m_bMaterials = false;
+    memset(m_pMaterials, 0, sizeof(m_pMaterials));
+
+    m_bHasMaterialText = false;
+    memset(m_MaterialTextTexture, 0, sizeof(m_MaterialTextTexture));
+
+    for (int i = 0; i < 2; i ++) {
+        m_setTextureColor[i] = 0;
+        m_setTextureAlpha[i] = 0;
+        m_cacheTextureColor[i] = nullptr;
+    }
 
     if (m_pEntity) {
         auto it = std::find(objectToIdMap.begin(), objectToIdMap.end(), m_pEntity);
@@ -48,12 +62,36 @@ CObjectSamp::CObjectSamp(int iModel, float fPosX, float fPosY, float fPosZ, CVec
 
 CObjectSamp::~CObjectSamp()
 {
-	auto modelId = m_pEntity->m_nModelIndex;
+    if (m_bMaterials) {
+        for (auto &m_pMaterial: m_pMaterials) {
+            if (m_pMaterial.m_bCreated && m_pMaterial.pTex) {
+                RwTextureDestroy(m_pMaterial.pTex);
+                m_pMaterial = {};
+            }
+        }
+        m_bMaterials = false;
+    }
 
-	if(m_pEntity)
-		ScriptCommand(&destroy_object, m_dwGTAId);
+    if (m_bHasMaterialText) {
+        for (auto &materialTextTexture: m_MaterialTextTexture) {
+            if (materialTextTexture) {
+                RwTextureDestroy(materialTextTexture);
+            }
+            materialTextTexture = nullptr;
+        }
+        m_bHasMaterialText = false;
+    }
 
-    if (m_pEntity) {
+    for (auto & cacheTextureColor : m_cacheTextureColor) {
+        if (cacheTextureColor != nullptr) {
+            RwTextureDestroy(cacheTextureColor);
+        }
+        cacheTextureColor = nullptr;
+    }
+
+	const auto modelId = m_pEntity->m_nModelIndex;
+
+	if (m_pEntity) {
         auto it = std::find(objectToIdMap.begin(), objectToIdMap.end(), m_pEntity);
         if (it != objectToIdMap.end()) {
             objectToIdMap.erase(it);
@@ -207,11 +245,12 @@ void CObjectSamp::SetPos(float x, float y, float z)
 {
 	if (GamePool_Object_GetAt(m_dwGTAId))
 	{
-		ScriptCommand(&put_object_at, m_dwGTAId, x, y, z);
+        CVector vec{ x, y, z };
+        z = CWorld::FindGroundZForCoord(x, y);
+        m_pEntity->Teleport(vec, false);
+        CHook::CallFunction<void>("_ZN11CTheScripts26ClearSpaceForMissionEntityERK7CVectorP7CEntity", &vec, m_pEntity);
 	}
 }
-
-
 
 void CObjectSamp::MoveTo(float fX, float fY, float fZ, float fSpeed, float fRotX, float fRotY, float fRotZ)
 {
@@ -310,7 +349,7 @@ void CObjectSamp::ProcessAttachToVehicle(CVehicleSamp* pVehicle)
 
 void CObjectSamp::InstantRotate(float x, float y, float z)
 {
-	if(!m_pEntity)return;
+	if (!m_pEntity) return;
 	x = DegreesToRadians(x);
 	y = DegreesToRadians(y);
 	z = DegreesToRadians(z);
@@ -354,5 +393,72 @@ void CObjectSamp::GetRotation(float* pfX,float* pfY,float* pfZ)
 	*pfX = *pfX * 57.295776 * -1.0;
 	*pfY = *pfY * 57.295776 * -1.0;
 	*pfZ = *pfZ * 57.295776 * -1.0;
+}
 
+void CObjectSamp::SetMaterialText(int iMaterialIndex, uint8_t byteMaterialSize, const char *szFontName, uint8_t byteFontSize, uint8_t byteFontBold, uint32_t dwFontColor, uint32_t dwBackgroundColor, uint8_t byteAlign, const char *szText)
+{
+    if (iMaterialIndex < 16) {
+        if(m_MaterialTextTexture[iMaterialIndex]) {
+            RwTextureDestroy(m_MaterialTextTexture[iMaterialIndex]);
+            m_MaterialTextTexture[iMaterialIndex] = nullptr;
+        }
+        m_MaterialTextTexture[iMaterialIndex] = CMaterialText::Generate(byteMaterialSize, szFontName, byteFontSize, byteFontBold, dwFontColor, dwBackgroundColor, byteAlign, szText);
+        if (m_MaterialTextTexture[iMaterialIndex]) m_bHasMaterialText = true;
+    }
+}
+
+void CObjectSamp::SetColorAlpha(uint8_t alpha1, uint8_t alpha2)
+{
+    m_setTextureAlpha[0] = alpha1;
+    m_setTextureAlpha[1] = alpha2;
+}
+
+void CObjectSamp::SetColor(uint32_t color1, uint32_t color2)
+{
+    m_setTextureColor[0] = color1;
+    m_setTextureColor[1] = color2;
+}
+
+void CObjectSamp::PaintMaterial(uint8_t ucColor1, uint8_t ucColor2)
+{
+    auto* pObject = m_pEntity->m_pRwObject;
+    if (!pObject) {
+        return;
+    }
+
+    if (pObject->type != rpATOMIC) {
+        return;
+    }
+
+    auto* pAtomic = (RpAtomic*)pObject;
+    RpGeometry* geometry = RpAtomicGetGeometry(pAtomic);
+    if (!geometry) {
+        return;
+    }
+
+    const int32 numMaterials = RpGeometryGetNumMaterials(geometry);
+    if (numMaterials < 1) {
+        return;
+    }
+
+    bool bPainted = false;
+    if (ucColor1 != 0) {
+        RpMaterial* mat = RpGeometryGetMaterial(geometry, 0);
+        if (mat) {
+            m_MaterialTextTexture[0] = CMaterialText::PaintTexture(mat->texture, ucColor1);
+            bPainted = true;
+        }
+    }
+
+    if (ucColor2 != 0) {
+        RpMaterial* mat = RpGeometryGetMaterial(geometry, 1);
+        if (mat) {
+            m_MaterialTextTexture[1] = CMaterialText::PaintTexture(mat->texture, ucColor2);
+            bPainted = true;
+        }
+    }
+
+    if (bPainted) {
+        m_bHasMaterialText = true;
+    }
 }

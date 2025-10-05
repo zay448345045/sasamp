@@ -2,6 +2,8 @@
 
 #include <cstdint>
 
+constexpr int INVALID_MODEL_ID = 18631;
+
 constexpr int32_t EXTRA_DIR_SIZE = 550;
 
 // used in CStreaming

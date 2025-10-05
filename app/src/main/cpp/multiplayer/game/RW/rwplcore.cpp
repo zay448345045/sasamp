@@ -11,7 +11,7 @@ RwMatrix* RwMatrixUpdate(RwMatrix* matrix) {
 }
 
 RwBool RwMatrixDestroy(RwMatrix* mpMat) {
-    return CHook::CallFunction<RwBool>(g_libGTASA + (VER_x32 ? 0x001E446C + 1 : 0x27F220), mpMat);
+    return CHook::CallFunction<RwBool>("_Z15RwMatrixDestroyP11RwMatrixTag", mpMat);
 }
 
 RwV3d* RwV3dTransformPoint(RwV3d* pointOut, const RwV3d* pointIn, const RwMatrix* matrix) {
@@ -35,18 +35,37 @@ RwStream* RwStreamOpen(RwStreamType type, RwStreamAccessType accessType, const v
 }
 
 RwBool RwStreamClose(RwStream* stream, void* data) {
-    return CHook::CallFunction<RwBool>(g_libGTASA + (VER_x32 ? 0x001E5958 + 1 : 0x280D24), stream, data);
+    return CHook::CallFunction<RwBool>("_Z13RwStreamCloseP8RwStreamPv", stream, data);
 }
 
 RwMatrix* RwMatrixTransform(RwMatrix* matrix, const RwMatrix* transform, RwOpCombineType combineOp) {
-    return CHook::CallFunction<RwMatrix*>(g_libGTASA + (VER_x32 ? 0x001E402C + 1 : 0x27EDE0), matrix, transform, combineOp);
+    return CHook::CallFunction<RwMatrix*>("_Z17RwMatrixTransformP11RwMatrixTagPKS_15RwOpCombineType", matrix, transform, combineOp);
 }
 
 RwMatrix* RwMatrixCreate() {
-    return CHook::CallFunction<RwMatrix*>(g_libGTASA + (VER_x32 ? 0x001E4494 + 1 : 0x27F260));
+    return CHook::CallFunction<RwMatrix*>("_Z14RwMatrixCreatev");
 }
 
-RwMatrix* RwMatrixRotate(RwMatrix* pMat, CVector* axis, float angle)
-{
-    return CHook::CallFunction<RwMatrix*>(g_libGTASA + (VER_x32 ? 0x001E38F4 + 1 : 0x27E710), pMat, axis, angle, rwCOMBINEPRECONCAT);
+RwMatrix* RwMatrixRotate(RwMatrix* pMat, CVector* axis, RwReal angle) {
+    return CHook::CallFunction<RwMatrix*>("_Z14RwMatrixRotateP11RwMatrixTagPK5RwV3df15RwOpCombineType", pMat, axis, angle, rwCOMBINEPRECONCAT);
+}
+
+RwMatrix* RwMatrixTranslate(RwMatrix *matrix, const RwV3d *translation, RwOpCombineType combineOp) {
+    return CHook::CallFunction<RwMatrix*>("_Z17RwMatrixTranslateP11RwMatrixTagPK5RwV3d15RwOpCombineType", matrix, translation, combineOp);
+}
+
+RwV3d* RwV3dTransformVector(RwV3d* vectorOut, const RwV3d* vectorIn, const RwMatrix* matrix) {
+    return CHook::CallFunction<RwV3d*>("_Z20RwV3dTransformVectorP5RwV3dPKS_PK11RwMatrixTag", vectorOut, vectorIn, matrix);
+}
+
+RwReal RwV3dNormalize(RwV3d* out, const RwV3d* in) {
+    return CHook::CallFunction<RwReal>("_Z14RwV3dNormalizeP5RwV3dPKS_", out, in);
+}
+
+RwMatrix* RwMatrixMultiply(RwMatrix* matrixOut, const RwMatrix* MatrixIn1, const RwMatrix* matrixIn2) {
+    return CHook::CallFunction<RwMatrix*>("_Z16RwMatrixMultiplyP11RwMatrixTagPKS_S2_", matrixOut, MatrixIn1, matrixIn2);
+}
+
+RwBool RwStreamFindChunk(RwStream* stream, RwUInt32 type, RwUInt32* lengthOut, RwUInt32* versionOut) {
+    return CHook::CallFunction<RwBool>("_Z17RwStreamFindChunkP8RwStreamjPjS1_", stream, type, lengthOut, versionOut);
 }
