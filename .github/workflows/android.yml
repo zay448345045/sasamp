@@ -1,0 +1,71 @@
+name: Android CI
+on:
+ workflow_dispatch:
+    inputs:
+      branch:
+        description: '选择构建的分支'
+        required: true
+        default: 'main'
+#on:
+#  push:
+#    branches: [ "main" ]
+#  pull_request:
+#    branches: [ "main" ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/checkout@v6
+      with:
+
+        # 核心逻辑：直接检出用户指定的分支
+        ref: ${{ github.event.inputs.branch }}
+        fetch-depth: 0
+    - name: set up JDK
+      uses: actions/setup-java@v5
+      with:
+        java-version: '25'
+        distribution: 'temurin'
+        cache: gradle
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v6
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+#      working-directory: ./Arrrknights
+    - name: Build with Gradle
+      run: ./gradlew assembleDebug
+    - name: Find APKs
+      run: find . -name "*.apk"
+    - name: 更新 Nightly
+      uses: softprops/action-gh-release@v2
+#        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+#      if: github.event_name == 'workflow_dispatch'
+      with:
+          tag_name: build-${{ github.run_number }}
+          name: "Nightly Build#${{ github.run_number }}"
+          prerelease: true
+          overwrite: true
+          body: |
+            ### 构建信息
+            - **安卓壳分支**: `${{ github.event.inputs.branch }}`
+            - **子模块分支**: ``
+            - **构建时间**: ${{ github.event.repository.updated_at }}
+            Commit: ${{ github.sha }}
+          files: |
+            app/build/outputs/apk/release/*.apk
+            app/build/outputs/apk/debug/*.apk
+            android-project/app/build/outputs/apk/**/*.apk
+            android/build/outputs/apk/**/*.apk
+            **/*.apk
+#          tag_name: debug-build-${{ github.run_number }}
+#          name: Debug Build ${{ github.run_number }}
+   #       body: |
+   #         包含构建目录下的所有 APK 文件。
+
+          draft: true
+    env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
